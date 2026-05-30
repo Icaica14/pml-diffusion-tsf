@@ -34,8 +34,8 @@ Our thesis is deliberately non-triumphalist: diffusion buys *richer, better-cali
 
 | Document | Description |
 |---|---|
-| [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md) | The complete, execution-ready implementation plan (English). |
-| [`docs/IMPLEMENTATION_PLAN_IT.md`](docs/IMPLEMENTATION_PLAN_IT.md) | Full Italian translation, with every acronym expanded on first use and a deep appendix on the experimental phase. |
+| [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md) | The complete, execution-ready implementation plan (English), including a deep appendix (E) on the experimental phase. |
+| [`docs/IMPLEMENTATION_PLAN_IT.md`](docs/IMPLEMENTATION_PLAN_IT.md) | Full Italian translation, with every acronym expanded on first use and the same deep appendix on the experimental phase. |
 
 ## Approach at a glance
 

@@ -262,7 +262,7 @@ Look-ahead leakage · scaling fit on test · straddling-window leakage · compar
 
 ## Part 7 — Experiments (numbered, falsifiable)
 
-Each experiment states a **hypothesis**, **setup**, **what we vary/measure**, the **result that would support or refute the thesis**, and the **artifact** (table/plot) it produces. This is the definition of "done."
+Each experiment states a **hypothesis**, **setup**, **what we vary/measure**, the **result that would support or refute the thesis**, and the **artifact** (table/plot) it produces. This is the definition of "done." *(Appendix E explains this phase in depth: first the methodology, then the operational runbook.)*
 
 ### E0 — Pipeline validation (gate)
 - **Hypothesis:** our pipeline reproduces a known result.
@@ -538,3 +538,124 @@ Recall the team has studied through Ch 5. The project needs Ch 9–11 most.
 | published CRPS-sum (E0 target) | | | |
 | price signal for E6 (ToU tariff / market price) | | | |
 | battery spec for E6 (E_max / P_max / η) | | | |
+
+---
+
+## Appendix E — The experimental phase, explained in depth (methodology + operational runbook)
+
+This appendix exists because the **experimental phase is the gradeable heart of the project**. Part 7 lists *which* experiments we run; here we explain **first the "why" (the methodology)** and **then the step-by-step "how" (the runbook)**. Read the first half to understand, the second half to execute.
+
+### E.1 — Methodology: what makes an experiment valid
+
+#### E.1.1 An experiment is not "running the code": it is a test that can fail
+In our project an experiment has five mandatory parts (the same as Part 7):
+1. **Hypothesis** — a precise, *falsifiable* prediction ("M3 has lower CRPS than DeepAR on the primary dataset").
+2. **Setup** — the controlled environment: dataset, `H`, `τ`, seed, models involved.
+3. **What varies / what is measured** — the *independent variable* we move (e.g. `T`) and the *dependent variable* we observe (e.g. CRPS, time).
+4. **Outcome that supports vs refutes** — decided *before* looking at the numbers. If you can't say in advance which result would refute you, it's not an experiment, it's a demo.
+5. **Artifact** — the table or plot that remains as evidence (and that ends up on a slide).
+
+The mental rule: **a good experiment can disappoint our thesis, and that is still a result.** If diffusion loses on a dataset, we report it and explain why — this *raises* the grade (honesty, understanding), it does not lower it.
+
+#### E.1.2 The fair-comparison principle (it's what makes the numbers credible)
+The entire value of the E1 comparison depends on every model playing *by the same rules*. Concretely:
+- **Same "data contract"** (Part 4.5): identical splits, scaling, `H`, `τ`, test windows for all models. One loader serves them all.
+- **Same way of extracting the point and the interval** (Part 3.4): the point metric is always computed from the predictive mean/median, even for probabilistic models.
+- **No asymmetric tuning:** don't compare an optimized TimeGrad against a DeepAR left at defaults. Either tune both, or neither, and state it.
+- **No post-hoc choices:** the horizon, the seed and the threshold are fixed *beforehand*. Choosing the most favorable afterward is cherry-picking (Part 6.6).
+
+#### E.1.3 The reproduction gate (E0): why we start there
+Before trusting *any* number we produce, we reproduce an **already-published** number (a TimeGrad or DeepAR CRPS-sum on a known dataset) within a sane tolerance (same order of magnitude, ≲20%). The logic:
+- If we reproduce a known result, the pipeline (loading, scaling, metric) is probably correct.
+- If we **cannot**, there's an upstream bug (leakage, scaling, wrong CRPS) and *all* the later numbers would be garbage.
+- It is also where you learn to use the tools on a target whose answer you already know — the least frustrating way to make mistakes.
+
+**Until E0 is green, no other experiment counts.** It is literally a gate.
+
+#### E.1.4 Statistical hygiene: the noise of randomness
+Learned models depend on the random seed (weight initialization, batch order). A single number can be lucky or unlucky. Therefore:
+- Run every learned model with **≥3 seeds** and report **mean ± standard deviation**.
+- If two models are within one standard deviation of each other, do *not* declare a winner: say "indistinguishable on this data".
+- Keep the seeds fixed and logged, so anyone can re-run and get the same numbers.
+
+#### E.1.5 How to read the output (what "looks good")
+- **CRPS / CRPS-sum:** lower is better. Alone it says nothing: it only makes sense *relative* (vs a baseline) or *vs the published number* (E0).
+- **Coverage @ 90%:** you want ~90%. Well below = the model is overconfident (narrow, lying intervals); well above = too cautious (wide, useless intervals).
+- **Interval width:** at equal coverage, narrower is better (sharper).
+- **PIT histogram:** you want it **flat**. U-shaped = overconfident; bell-shaped = too cautious. It is the visual honesty check of the forecast.
+- **CRPS-vs-`T` curve (E3):** you're looking for a **knee** — a point beyond which adding denoising steps no longer improves quality but keeps costing time. That knee is the "memorable slide".
+- **Money-saved bar / CRPS-vs-€ scatter (E6):** the stochastic plan should beat the deterministic one, savings should grow with cost asymmetry, and lower-CRPS models should sit higher on the € axis.
+
+#### E.1.6 Threats to validity (the list to fear)
+These are the ways an experiment can *look* successful and be false. Print it and use it as a checklist:
+- **Look-ahead leakage:** the model sees future information (e.g. a covariate computed over the whole series).
+- **Scaling leakage:** the scaler was fit including val/test.
+- **Straddling window:** a `(H, τ)` window crosses the train/test boundary.
+- **Unfair comparison:** distributional vs point model without bringing both to the same metric.
+- **Cherry-picking:** post-hoc choice of favorable seed/horizon/threshold.
+- **CRPS ambiguity:** reporting "CRPS" without saying whether it's per-channel mean or CRPS-sum (they're not comparable).
+- **(Economic) price double-use:** using the same price path to *both* tune and evaluate a schedule, or quoting absolute € without the oracle/naive bracket.
+
+### E.2 — Runbook: how you actually run it, step by step
+
+> Assumes the repo skeleton of Part 8.1 and the two environments of Part 8.2. Golden order: **first get everything running on Exchange** (minutes, even without a GPU), *then* move to the primary dataset on Colab.
+
+#### E.2.0 Environment setup (once)
+1. **Local (light):** create a virtual environment; install the "light" group (numpy, pandas, Darts/statsforecast, the metrics, matplotlib). Data, classical baselines, evaluation and plots run here.
+2. **Colab (GPU):** in a notebook, first cell = the known-good `pip install` block (pinned, compatible versions of PyTorchTS + GluonTS + torch — compatibility is fragile, Part 8.2). Second cell = mount Google Drive. Third cell = clone/update the repo. Save checkpoints to Drive, not to Colab's ephemeral disk.
+3. **Smoke check:** run the Exchange loader's `__main__`; it must print train/val/test shapes with no errors. If this doesn't run, do not proceed.
+
+#### E.2.1 Run E0 (the gate) — do it first
+1. Pick the (model, dataset) pair with a **published** CRPS-sum (e.g. TimeGrad on Exchange or Electricity). Note the target number in Appendix D.
+2. Write/use `experiments/run_E0.py`: load data with the central loader, train the model with the config (YAML), sample `S` trajectories on the test set, compute CRPS-sum with the evaluation module.
+3. Compare with the published number.
+   - **Within tolerance?** → E0 green. Write the "reproduction" row in the registry and a note on the gaps. Proceed.
+   - **Out of tolerance?** → *do not proceed*. Check, in this order: CRPS definition (sum vs mean?), scaling leakage, `H/τ` alignment, number of samples `S`. Iterate until it falls in range.
+4. Cross-check the CRPS: compute it by hand on a 3-point example and compare with the module, once, to trust the code.
+
+#### E.2.2 Run E1 (the main comparison)
+1. Fix, *beforehand*, `H`, `τ`, the primary dataset, the set of seeds (≥3).
+2. For each model `M0, M1, M2, M3` and each seed: run via its YAML config; every run **appends a row** to `results/registry.csv` with config-hash + all metrics + timings. No hand-typed numbers.
+3. Generate the master table *from* `registry.csv` (a script, not copy-paste): for each model, mean ± standard deviation over seeds.
+4. Generate a forecast-with-intervals plot per model (median + 50/90% bands vs ground truth).
+5. Read the results with the mindset of §E.1.5; write a conclusion sentence *before* polishing the slides.
+
+#### E.2.3 Run E3 (denoising steps vs quality/cost)
+1. Keep everything fixed except `T`; define the grid `T ∈ {5,10,25,50,100,(250)}`.
+2. `experiments/run_E3.py` loops over `T`: for each value, sample from the *already-trained* model (do not retrain!), record CRPS *and* inference time per window.
+3. Plot two curves on the same axes (CRPS vs `T`; time vs `T`). Look for the knee (§E.1.5).
+4. If you also use the toy DDPM, repeat: this is where it pays off, because you control it completely.
+
+#### E.2.4 Run E4 (regime-shift robustness)
+1. Define two periods: "normal" (train) and "shifted" (test) — a different season, a structural break, a volatility cluster. Document the criterion.
+2. Train on the normal period; evaluate on both the normal and the shifted period.
+3. Measure the *drop* in CRPS and coverage from normal→shifted, for each model.
+4. Artifact: a before/after calibration plot + a degradation table. The story is "who keeps the intervals honest under shift?".
+
+#### E.2.4-bis Run E6 (economic value / battery dispatch)
+> Requires no retraining: it runs *over* the forecasts already saved in E1. It's the pillar that turns probability into euros.
+1. **Fix the economic scene once:** a battery spec (`E_max, P_max, η`) and a time-of-use price `π_t` (a realistic ToU tariff, or an hourly market price). Put them in the config and in Appendix D.
+2. **For each model, build two schedules** in `src/eval/economic.py`:
+   - *deterministic:* feed the LP the **point** forecast (mean/median) → one schedule `u_{1:τ}`;
+   - *stochastic (SAA):* feed the LP the `S` sampled trajectories and minimize the **expected** bill → a hedged schedule. (Only probabilistic models can do this — that's the point.)
+3. **Apply each schedule to the true future**, compute the realized bill. Also compute the **oracle** (true future into the LP → lower bound) and the **naive** plan (ceiling).
+4. **Record** in `registry.csv`: bill (€) per model and plan, **money saved vs naive**, **value of the distribution** (deterministic − stochastic), and the fraction of the oracle's achievable savings.
+5. **Cost-asymmetry sweep:** repeat varying the price spread (or the demand-charge weight). Expected: the distribution helps *more* as the asymmetry grows.
+6. **Artifacts:** money-saved bar chart (with oracle/naive brackets) + savings-vs-asymmetry line + **CRPS(from E1)-vs-€-saved** scatter. Expected conclusion: lower CRPS ⇒ lower bill.
+7. **If the LP gives trouble:** fall back to the per-step **newsvendor** rule (closed-form optimal quantile given the cost ratio) — same story, ~20 lines, no solver.
+
+#### E.2.5 Cross-cutting discipline (applies to every experiment)
+- **One config = one run:** no magic numbers in code; everything in YAML (model, data, `H`, `τ`, `T`, seed).
+- **Checkpoints saved to Drive** after every training run, so a Colab disconnect doesn't cost a run.
+- **The registry is the truth:** the slide table is *regenerated* from `results/registry.csv`. If a number isn't in the registry, it doesn't exist.
+- **Figures are regenerated from scripts** (Part 8.6): never a "hand-made" figure you can't reconstruct.
+- **Pre-merge checklist (Part 8.6)** at every step: no leakage, same `H/τ`/window, seed logged, metric stated, figure regenerable, config committed.
+
+#### E.2.6 "Definition of done" of the experimental phase
+The experimental phase is closed (Tier 1, the "balanced" one) when:
+- ☐ E0 is green and documented (reproduction row + gap note);
+- ☐ the E1 table is complete, with mean ± standard deviation over ≥3 seeds, script-generated;
+- ☐ the E3 trade-off curve exists with a readable knee;
+- ☐ E6 has been run over the E1 forecasts: money-saved chart (with oracle/naive brackets) + CRPS-vs-€ scatter;
+- ☐ E4 has been attempted, with a before/after calibration plot;
+- ☐ every number in every figure is traceable back to a row of `results/registry.csv` and a committed YAML config.
