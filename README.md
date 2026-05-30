@@ -15,13 +15,16 @@
 
 ## Overview
 
-Real forecasting is not *"tomorrow's electricity demand will be 100"*; it is *"here is the distribution of plausible tomorrows."* We frame multi-step forecasting as learning the **conditional generative distribution** `p(future | past)` and instantiate it with a **conditional denoising diffusion model**, trained by the same ELBO / noise-prediction objective the PML course derives in its final chapter.
+Most forecasts give you a single number — *"tomorrow's electricity demand will be 100."* But the future is uncertain, and one number hides that uncertainty entirely. A more useful forecast says: *"here are the plausible tomorrows, and how likely each one is"* — a whole **distribution** of futures instead of one guess.
 
-We compare it head-to-head against a naive baseline, a classical statistical model (ARIMA/ETS), and a deep autoregressive probabilistic model (DeepAR), and we measure three things the exam rewards:
+That is what this project builds. We treat forecasting as one question: *given everything seen so far (the past), what does the distribution of possible futures look like?* — written `p(future | past)`. To answer it we use a **diffusion model**: the same family of generative models behind modern image generators, retrained here to *generate plausible future trajectories of a time series* instead of pictures. It learns from the exact objective the PML course derives in its final chapter — our twist is to make it **conditional on the past**.
+
+We compare it head-to-head against a naive baseline, a classical statistical model (ARIMA/ETS), and a deep autoregressive probabilistic model (DeepAR), and we measure **four** things the exam rewards:
 
 - **Point accuracy** — MAE, RMSE, MASE
 - **Probabilistic quality** — CRPS, interval coverage, calibration
 - **Cost** — training/inference time, and the quality-vs-denoising-steps trade-off
+- **Economic value** — the *money saved* when a real decision (scheduling a battery against a time-of-use price) is driven by each model's forecast, because a better-calibrated distribution makes cheaper, more robust decisions (see [Economic value](#economic-value--turning-forecasts-into-money) below)
 
 Our thesis is deliberately non-triumphalist: diffusion buys *richer, better-calibrated uncertainty*, but its advantage depends on horizon, dataset, and a real sampling-cost penalty we can measure and tune.
 
@@ -48,9 +51,20 @@ Our thesis is deliberately non-triumphalist: diffusion buys *richer, better-cali
 
 **The experiments** (each numbered, falsifiable, producing one artifact):
 
-`E0` reproduce-a-published-result gate · `E1` main comparison · `E2` horizon sweep · `E3` denoising-steps vs quality & cost · `E4` regime-shift robustness · `E5` generality (stretch).
+`E0` reproduce-a-published-result gate · `E1` main comparison · `E2` horizon sweep · `E3` denoising-steps vs quality & cost · `E4` regime-shift robustness · `E6` **economic value (battery dispatch)** · `E5` generality (stretch).
 
 See [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md) Parts 5–7 for the full specification.
+
+## Economic value — turning forecasts into money
+
+A forecast only matters if it changes a **decision**. Our fourth evaluation pillar makes that concrete: we use each model's forecast to **schedule a battery** (charge when power is cheap, discharge when it's expensive) against a time-of-use electricity price, then price the result.
+
+- A **point** forecast plans against a single guessed future; a **distribution** (diffusion / DeepAR samples) plans against the whole spread of plausible futures, hedging its bets.
+- The schedule is a small **linear program**; with a distribution we minimize the *expected* bill over the model's sampled trajectories (sample-average approximation).
+- We apply every schedule to the **true** future and read off the realized bill, then report **money saved** vs a naive baseline (ceiling) and a perfect-foresight **oracle** (lower bound) — so euros are always shown as a fraction of what was actually achievable.
+- The punchline ties the pillars together: optimal storage decisions use a **quantile** of the predictive distribution (a *newsvendor* structure), and **CRPS is the average decision regret over all cost ratios** — so a better-calibrated forecast should literally save more money. `E6` tests whether it does.
+
+This is a **bolt-on module** (`src/eval/economic.py`) that runs *over the forecasts E1 already produces* — **no extra training** — so it adds a headline result without enlarging the core project. Full protocol in [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md) §3.5, §6.4, and experiment E6.
 
 ## Planned repository structure
 
@@ -62,7 +76,7 @@ pml-diffusion-tsf/
 ├── src/
 │   ├── data/                 # loaders, splitting, scaling, windowing, manifest
 │   ├── models/               # wrappers: naive, arima, deepar, timegrad, toy_ddpm
-│   ├── eval/                 # metrics (CRPS, coverage, calibration), runners
+│   ├── eval/                 # metrics (CRPS, coverage, calibration), economic.py (battery dispatch), runners
 │   ├── viz/                  # consistent plotting (forecasts, intervals, curves)
 │   └── utils/                # seeds, logging, timing, config loading
 ├── experiments/              # entry scripts: run_E0.py ... run_E4.py
@@ -113,7 +127,7 @@ Released under the [MIT License](LICENSE). If your university's coursework polic
 
 **Domanda di ricerca.** Un *diffusion model* può produrre **forecast probabilistici** di una serie temporale — una *distribuzione* di futuri plausibili invece di un singolo numero — meglio calibrati delle baseline classiche e di deep learning, e a quale costo computazionale?
 
-**Idea.** Inquadriamo il forecasting come l'apprendimento della distribuzione generativa condizionata `p(futuro | passato)` e la realizziamo con un diffusion model condizionato, addestrato con lo stesso obiettivo (ELBO / predizione del rumore) che il corso ricava nell'ultimo capitolo. Lo confrontiamo con una baseline ingenua, un modello classico (ARIMA/ETS) e un modello probabilistico di deep learning (DeepAR), misurando: **accuratezza puntuale** (MAE/RMSE/MASE), **qualità probabilistica** (CRPS, copertura, calibrazione) e **costo**.
+**Idea.** Inquadriamo il forecasting come l'apprendimento della distribuzione generativa condizionata `p(futuro | passato)` e la realizziamo con un diffusion model condizionato, addestrato con lo stesso obiettivo (ELBO / predizione del rumore) che il corso ricava nell'ultimo capitolo. Lo confrontiamo con una baseline ingenua, un modello classico (ARIMA/ETS) e un modello probabilistico di deep learning (DeepAR), misurando **quattro** cose: **accuratezza puntuale** (MAE/RMSE/MASE), **qualità probabilistica** (CRPS, copertura, calibrazione), **costo** e **valore economico** — il denaro risparmiato quando il forecast di ciascun modello programma una batteria contro un prezzo a fasce orarie (esperimento E6, un modulo *sopra i forecast già prodotti*, senza addestramento aggiuntivo).
 
 **Stato:** 🟡 fase di pianificazione, nessun codice ancora. Il piano completo è in [`docs/IMPLEMENTATION_PLAN_IT.md`](docs/IMPLEMENTATION_PLAN_IT.md) — include un'appendice che spiega a fondo la fase sperimentale (prima la metodologia, poi le istruzioni operative passo-passo).
 
