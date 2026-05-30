@@ -36,6 +36,7 @@ Our thesis is deliberately non-triumphalist: diffusion buys *richer, better-cali
 |---|---|
 | [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md) | The complete, execution-ready implementation plan (English), including a deep appendix (E) on the experimental phase. |
 | [`docs/IMPLEMENTATION_PLAN_IT.md`](docs/IMPLEMENTATION_PLAN_IT.md) | Full Italian translation, with every acronym expanded on first use and the same deep appendix on the experimental phase. |
+| [`docs/EDA_EXCHANGE.md`](docs/EDA_EXCHANGE.md) | Figure-backed exploratory analysis of the Exchange iteration dataset (random-walk levels, volatility clustering, heavy tails) and what each finding implies for the models. |
 
 ## Approach at a glance
 

@@ -24,6 +24,11 @@ pyyaml>=6.0
 requests>=2.31
 tqdm>=4.66
 statsforecast>=1.7        # M1 — AutoARIMA / AutoETS (Nixtla)
+statsmodels>=0.14         # ADF test, ACF/PACF for EDA + residual diagnostics
+
+# --- notebooks (EDA + the toy-DDPM teaching notebook) ---
+jupyter>=1.0
+ipykernel>=6.29
 
 # --- economic-value pillar (E6 battery dispatch LP; tiny, pure-python solver) ---
 PuLP>=2.7                 # swap for cvxpy if a richer model is needed (plan §6.4)
