@@ -7,7 +7,7 @@
 ![course](https://img.shields.io/badge/course-PML%20%C2%B7%20UniTS-8A2BE2)
 ![python](https://img.shields.io/badge/python-3.10%2B-3776AB)
 
-**Exam project for the *Probabilistic Machine Learning* (PML) course — University of Trieste, Prof. Luca Bortolussi. Team of 3.**
+**Exam project for the *Probabilistic Machine Learning* (PML) course — University of Trieste, Prof. Luca Bortolussi.**
 
 🇬🇧 English (below) · 🇮🇹 [Versione italiana](#-in-italiano)
 
