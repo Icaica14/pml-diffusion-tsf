@@ -131,8 +131,27 @@ class ForecastDataset:
     def tau(self) -> int:
         return int(self.meta["horizon"])
 
+    def num_windows(self, split: str) -> int:
+        """How many ``(context, target)`` windows a split yields — *without* building them.
+
+        Use this before calling :meth:`windows` on a wide dataset: materializing every
+        window is ``N × H × D`` floats, which for Electricity (D=321, H=168) is ~8 GB.
+        The deep models (M2/M3) never need that — GluonTS does its own windowing from
+        the raw series (:meth:`to_gluonts`); eager windows are only for the classical
+        baselines and the toy DDPM on small data.
+        """
+        L = self.raw_splits[split].shape[0]
+        span = self.meta["context_length"] + self.meta["horizon"]
+        stride = self.meta.get("stride", 1)
+        return max(0, (L - span) // stride + 1)
+
     def windows(self, split: str, scaled: bool = True) -> tuple[np.ndarray, np.ndarray]:
-        """``(contexts, targets)`` for a split — scaled by default, raw if asked."""
+        """``(contexts, targets)`` for a split — scaled by default, raw if asked.
+
+        Eager: allocates ``N × H × D`` + ``N × τ × D`` floats. Cheap for small/narrow
+        data (Exchange), but ~8 GB for Electricity — check :meth:`num_windows` first,
+        or window a slice of the split rather than the whole thing.
+        """
         source = self.splits if scaled else self.raw_splits
         return make_windows(
             source[split],

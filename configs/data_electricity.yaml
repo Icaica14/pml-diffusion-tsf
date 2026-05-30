@@ -1,0 +1,40 @@
+# =============================================================================
+# Electricity — the PRIMARY dataset (the group project's headline) (plan §4.2–4.3)
+# =============================================================================
+# 321 client load series, hourly, ~26304 steps (2012-2014). From the LSTNet
+# benchmark (laiguokun), TimeGrad's dataset family. Strong daily/weekly seasonality
+# and industrial relevance -> a good story and the E0 reproduce-gate is possible.
+#
+# Golden rule (plan §4.3): get the whole pipeline GREEN on Exchange first, then run
+# here. Same data contract, so switching datasets is just switching this config.
+#
+# E0 note: the published TimeGrad/CSDI CRPS-sum numbers are on the GluonTS
+# `electricity_nips` variant (official split + rolling-window test). This config
+# loads the raw LSTNet file for fast local iteration/EDA; E0 swaps in
+# `electricity_nips` via GluonTS on Colab (see src/data/electricity.py).
+# =============================================================================
+
+name: electricity
+kind: data
+
+source:
+  # gzipped, comma-separated, header-less; 321 float columns, one row per hour.
+  url: "https://raw.githubusercontent.com/laiguokun/multivariate-time-series-data/master/electricity/electricity.txt.gz"
+  raw_dir: "data/raw"
+  filename: "electricity.txt.gz"
+  freq: "h"                 # hourly (pandas >=2.2 alias)
+  start_date: "2012-01-01"  # nominal; the raw file ships without timestamps
+  n_channels: 321
+
+split:
+  ratios: [0.7, 0.1, 0.2]   # train / val / test, contiguous, test = most recent
+
+window:
+  context_length: 168       # H  — one week of hourly history
+  horizon: 24               # tau — one day ahead (matches electricity_nips pred. length)
+  stride: 1
+
+scaling:
+  method: "standardize"     # per-channel z-score; FIT ON TRAIN ONLY
+
+seed: 42

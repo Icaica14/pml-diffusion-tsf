@@ -20,7 +20,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from src.data.contract import make_windows, temporal_split  # noqa: E402
+from src.data.contract import ForecastDataset, make_windows, temporal_split  # noqa: E402
 from src.data.scaling import Scaler  # noqa: E402
 
 
@@ -102,6 +102,29 @@ def test_windows_do_not_straddle_split_boundary() -> None:
     # the per-split count must be strictly smaller -> straddlers are excluded.
     global_ctx, _ = make_windows(x, H, tau, stride=1)
     assert total < global_ctx.shape[0]
+
+
+def _toy_dataset(L: int = 400, H: int = 30, tau: int = 10) -> ForecastDataset:
+    x = _toy(L=L, D=8)
+    raw = temporal_split(x, (0.7, 0.1, 0.2))
+    sc = Scaler().fit(raw["train"])
+    return ForecastDataset(
+        name="toy",
+        splits={k: sc.transform(v) for k, v in raw.items()},
+        raw_splits=raw,
+        scaler=sc,
+        meta={"D": 8, "freq": "D", "start_date": "2000-01-01",
+              "context_length": H, "horizon": tau, "stride": 1,
+              "scaling": "standardize", "split_ratios": [0.7, 0.1, 0.2], "seed": 0},
+    )
+
+
+def test_num_windows_matches_eager_windows() -> None:
+    """The analytic count must equal what the eager builder actually produces."""
+    ds = _toy_dataset()
+    for split in ("train", "val", "test"):
+        ctx, tgt = ds.windows(split)
+        assert ds.num_windows(split) == ctx.shape[0] == tgt.shape[0]
 
 
 def test_short_split_returns_empty_windows() -> None:
