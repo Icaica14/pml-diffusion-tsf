@@ -80,6 +80,7 @@ class SeasonalNaiveForecaster:
     n_samples: int = 100
     seed: int = 0
     residual_pool_: np.ndarray = field(default=None, repr=False)
+    _rng: object = field(default=None, repr=False)
 
     # -- fit / predict --------------------------------------------------------
     def fit(self, train_contexts: np.ndarray, train_targets: np.ndarray) -> "SeasonalNaiveForecaster":
@@ -97,6 +98,25 @@ class SeasonalNaiveForecaster:
         self.residual_pool_ = train_targets - point
         return self
 
+    def fit_chunked(self, window_iter) -> "SeasonalNaiveForecaster":
+        """Memory-safe :meth:`fit` for wide datasets — build the pool chunk by chunk.
+
+        ``window_iter`` yields ``(contexts, targets)`` chunks (e.g. from
+        :meth:`~src.data.contract.ForecastDataset.iter_windows`). The residual pool is
+        the *same* ``targets − naive_point(contexts)`` as :meth:`fit`, just concatenated
+        across chunks so the full ``(M, H, D)`` training-window tensor (≈8 GB on
+        Electricity) is never held at once.
+        """
+        pools: list[np.ndarray] = []
+        for ctx, tgt in window_iter:
+            ctx = np.asarray(ctx, dtype=np.float64)
+            tgt = np.asarray(tgt, dtype=np.float64)
+            pools.append(tgt - seasonal_naive_point(ctx, self.season_length, self.horizon))
+        if not pools:
+            raise ValueError("No training windows to fit the residual bootstrap.")
+        self.residual_pool_ = np.concatenate(pools, axis=0)
+        return self
+
     def point_forecast(self, contexts: np.ndarray) -> np.ndarray:
         """The deterministic ``(N, tau, D)`` seasonal-naive forecast."""
         return seasonal_naive_point(contexts, self.season_length, self.horizon)
@@ -112,8 +132,13 @@ class SeasonalNaiveForecaster:
         point = self.point_forecast(contexts)  # (N, tau, D)
         N = point.shape[0]
         M = self.residual_pool_.shape[0]
-        rng = np.random.default_rng(self.seed)
-        idx = rng.integers(0, M, size=(N, self.n_samples))  # (N, S)
+        # One persistent RNG stream across predict() calls, NOT a fresh seed each call:
+        # so chunked scoring (many predict() calls over window chunks) draws the *same*
+        # bootstrap indices, in the same order, as one eager predict() over all windows.
+        # Chunk-size-invariant and bit-identical to the eager path (plan §4.4).
+        if self._rng is None:
+            self._rng = np.random.default_rng(self.seed)
+        idx = self._rng.integers(0, M, size=(N, self.n_samples))  # (N, S)
         drawn = self.residual_pool_[idx]  # (N, S, tau, D)
         samples = point[:, None, :, :] + drawn
         return point, samples

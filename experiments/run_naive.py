@@ -26,7 +26,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT))
 
 from src.data.loader import build_dataset  # noqa: E402
-from src.eval.metrics import evaluate_forecast, seasonal_naive_scale  # noqa: E402
+from src.eval.metrics import evaluate_forecast, evaluate_streaming, seasonal_naive_scale  # noqa: E402
 from src.eval.registry import append_result  # noqa: E402
 from src.models.naive import SeasonalNaiveForecaster  # noqa: E402
 from src.utils.config import load_config  # noqa: E402
@@ -45,6 +45,14 @@ def main() -> None:
         "explicit value to override for an ablation (e.g. 168 = weekly naive).",
     )
     parser.add_argument("--samples", type=int, default=100, help="Bootstrap samples per window.")
+    parser.add_argument(
+        "--chunk",
+        type=int,
+        default=0,
+        help="Score the test split in chunks of this many windows (0 = eager, build "
+        "all windows at once). Use a few hundred for wide data like Electricity "
+        "(D=321), whose full (N, S, tau, D) sample tensor is hundreds of GB.",
+    )
     parser.add_argument("--seed", type=int, default=None, help="Override the config seed.")
     parser.add_argument("--registry", default=str(REPO_ROOT / "results" / "registry.csv"))
     args = parser.parse_args()
@@ -59,23 +67,36 @@ def main() -> None:
     # M0's forecast AND every model's MASE denominator share, for comparability).
     season = args.season if args.season is not None else int(cfg.get("eval", {}).get("season_length", 1))
 
-    # Metrics are read on the ORIGINAL scale → use raw (un-scaled) windows.
-    tr_ctx, tr_tgt = ds.windows("train", scaled=False)
-    te_ctx, te_tgt = ds.windows("test", scaled=False)
+    # MASE denominator (data-level constant, original scale) — shared by every model.
+    scale = seasonal_naive_scale(ds.raw_splits["train"], season)
 
     model = SeasonalNaiveForecaster(
         season_length=season,
         horizon=ds.tau,
         n_samples=args.samples,
         seed=seed,
-    ).fit(tr_ctx, tr_tgt)
+    )
 
-    t0 = time.perf_counter()
-    point, samples = model.predict(te_ctx)
-    predict_s = time.perf_counter() - t0
-
-    scale = seasonal_naive_scale(ds.raw_splits["train"], season)
-    metrics = evaluate_forecast(te_tgt, point, samples, scale, levels=(0.5, 0.9))
+    if args.chunk and args.chunk > 0:
+        # Memory-safe path for wide data (Electricity): stream train + test windows so
+        # neither the (M, H, D) train tensor nor the (N, S, tau, D) test samples are
+        # ever held whole. Numerically identical to the eager path (see ForecastEvaluator).
+        model.fit_chunked(ds.iter_windows("train", args.chunk, scaled=False))
+        t0 = time.perf_counter()
+        metrics, n_windows = evaluate_streaming(
+            ds, model, "test", scale, args.chunk, scaled=False, levels=(0.5, 0.9)
+        )
+        predict_s = time.perf_counter() - t0
+    else:
+        # Eager path: small/narrow data (Exchange) — metrics on the ORIGINAL scale.
+        tr_ctx, tr_tgt = ds.windows("train", scaled=False)
+        te_ctx, te_tgt = ds.windows("test", scaled=False)
+        model.fit(tr_ctx, tr_tgt)
+        t0 = time.perf_counter()
+        point, samples = model.predict(te_ctx)
+        predict_s = time.perf_counter() - t0
+        metrics = evaluate_forecast(te_tgt, point, samples, scale, levels=(0.5, 0.9))
+        n_windows = int(te_tgt.shape[0])
 
     row = {
         "timestamp": datetime.now(timezone.utc).isoformat(timespec="seconds"),
@@ -83,7 +104,7 @@ def main() -> None:
         "model": "seasonal_naive",
         "season_length": season,
         "split": "test",
-        "n_windows": int(te_tgt.shape[0]),
+        "n_windows": n_windows,
         "H": ds.H,
         "tau": ds.tau,
         "D": ds.D,

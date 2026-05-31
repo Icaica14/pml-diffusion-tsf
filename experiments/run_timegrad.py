@@ -32,7 +32,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT))
 
 from src.data.loader import build_dataset  # noqa: E402
-from src.eval.metrics import evaluate_forecast, seasonal_naive_scale  # noqa: E402
+from src.eval.metrics import evaluate_forecast, evaluate_streaming, seasonal_naive_scale  # noqa: E402
 from src.eval.registry import append_result  # noqa: E402
 from src.models.timegrad import TimeGradForecaster  # noqa: E402
 from src.utils.config import load_config  # noqa: E402
@@ -71,6 +71,10 @@ def main() -> None:
     parser.add_argument("--season", type=int, default=None,
                         help="Seasonal lag m for the MASE denominator. Default: "
                              "eval.season_length from the config (identical to M0/M1/M2).")
+    parser.add_argument("--chunk", type=int, default=0,
+                        help="Score the test split in chunks of this many windows "
+                             "(0 = eager). Required for Electricity (D=321): its full "
+                             "(N, S, tau, D) sample tensor is hundreds of GB.")
     parser.add_argument("--seed", type=int, default=None, help="Override the config seed.")
     parser.add_argument("--registry", default=str(REPO_ROOT / "results" / "registry.csv"))
     args = parser.parse_args()
@@ -86,7 +90,6 @@ def main() -> None:
     # Train on the raw multivariate train series via the contract's multivariate bridge
     # (TimeGrad scales internally). Metrics read the raw test set on the original scale.
     train_ds = ds.to_gluonts_multivariate("train")
-    te_ctx, te_tgt = ds.windows("test", scaled=False)
 
     model = TimeGradForecaster(
         target_dim=ds.D,
@@ -113,13 +116,22 @@ def main() -> None:
     model.fit(train_ds)
     fit_s = time.perf_counter() - t_fit
 
-    t0 = time.perf_counter()
-    point, samples = model.predict(te_ctx)
-    predict_s = time.perf_counter() - t0
-
     # MASE denominator is a data-level constant: identical to M0/M1/M2 for comparability.
     scale = seasonal_naive_scale(ds.raw_splits["train"], season_length=season)
-    metrics = evaluate_forecast(te_tgt, point, samples, scale, levels=(0.5, 0.9))
+
+    if args.chunk and args.chunk > 0:
+        t0 = time.perf_counter()
+        metrics, n_windows = evaluate_streaming(
+            ds, model, "test", scale, args.chunk, scaled=False, levels=(0.5, 0.9)
+        )
+        predict_s = time.perf_counter() - t0
+    else:
+        te_ctx, te_tgt = ds.windows("test", scaled=False)
+        t0 = time.perf_counter()
+        point, samples = model.predict(te_ctx)
+        predict_s = time.perf_counter() - t0
+        metrics = evaluate_forecast(te_tgt, point, samples, scale, levels=(0.5, 0.9))
+        n_windows = int(te_tgt.shape[0])
 
     row = {
         "timestamp": datetime.now(timezone.utc).isoformat(timespec="seconds"),
@@ -127,7 +139,7 @@ def main() -> None:
         "model": "timegrad",
         "season_length": season,
         "split": "test",
-        "n_windows": int(te_tgt.shape[0]),
+        "n_windows": n_windows,
         "H": ds.H,
         "tau": ds.tau,
         "D": ds.D,

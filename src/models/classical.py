@@ -85,6 +85,7 @@ class ClassicalForecaster:
     seed: int = 0
     results_: list = field(default=None, repr=False)
     orders_: list = field(default=None, repr=False)
+    _rng: object = field(default=None, repr=False)
 
     # -- fit ------------------------------------------------------------------
     def fit(self, train_series: np.ndarray) -> "ClassicalForecaster":
@@ -182,7 +183,10 @@ class ClassicalForecaster:
                 ses[i, :, d] = np.asarray(fc.se_mean, dtype=np.float64)
         # Guard degenerate (zero) standard errors so the Gaussian draw is well-defined.
         ses[ses <= 0.0] = np.finfo(np.float64).eps
-        rng = np.random.default_rng(self.seed)
-        noise = rng.standard_normal((N, self.n_samples, tau, D))
+        # One persistent RNG stream across predict() calls (see M0): chunked scoring draws
+        # the same Gaussian noise, in order, as one eager predict() — chunk-size-invariant.
+        if self._rng is None:
+            self._rng = np.random.default_rng(self.seed)
+        noise = self._rng.standard_normal((N, self.n_samples, tau, D))
         samples = means[:, None, :, :] + noise * ses[:, None, :, :]
         return means, samples

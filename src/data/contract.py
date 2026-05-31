@@ -160,6 +160,38 @@ class ForecastDataset:
             self.meta.get("stride", 1),
         )
 
+    def iter_windows(self, split: str, chunk_size: int, scaled: bool = True):
+        """Yield ``(contexts, targets)`` in chunks of at most ``chunk_size`` windows.
+
+        The memory-safe sibling of :meth:`windows`: it emits *exactly* the same windows,
+        in the same order, but never materializes more than ``chunk_size`` of them at
+        once. This is what makes scoring Electricity feasible — its full ``(N, S, τ, D)``
+        sample tensor (D=321) is hundreds of GB, so the classical baselines stream the
+        test split through :class:`~src.eval.metrics.ForecastEvaluator` instead of
+        building every window up front. Iterate, predict each chunk, fold it in.
+        """
+        if chunk_size < 1:
+            raise ValueError(f"chunk_size must be >= 1, got {chunk_size}.")
+        source = self.splits if scaled else self.raw_splits
+        values = np.asarray(source[split])
+        if values.ndim != 2:
+            raise ValueError(f"Expected (L, D) split, got shape {values.shape}.")
+        H = self.meta["context_length"]
+        tau = self.meta["horizon"]
+        stride = self.meta.get("stride", 1)
+        span = H + tau
+        ctx_buf: list[np.ndarray] = []
+        tgt_buf: list[np.ndarray] = []
+        for start in range(0, values.shape[0] - span + 1, stride):
+            ctx_end = start + H
+            ctx_buf.append(values[start:ctx_end])
+            tgt_buf.append(values[ctx_end : ctx_end + tau])
+            if len(ctx_buf) == chunk_size:
+                yield np.stack(ctx_buf), np.stack(tgt_buf)
+                ctx_buf, tgt_buf = [], []
+        if ctx_buf:
+            yield np.stack(ctx_buf), np.stack(tgt_buf)
+
     # -- GluonTS bridge (M2 DeepAR / M3 TimeGrad live in the heavy env) --------
     def to_gluonts(self, split: str = "train"):
         """Build a GluonTS ``ListDataset`` (one univariate entry per channel).

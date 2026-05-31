@@ -224,3 +224,102 @@ def evaluate_forecast(
         out[f"cov{pct}"] = interval_coverage(y_true, samples, level)
         out[f"width{pct}"] = interval_width(samples, level)
     return out
+
+
+# ---------------------------------------------------------------------------
+# Streaming / chunked evaluation (wide datasets, e.g. Electricity D=321)
+# ---------------------------------------------------------------------------
+class ForecastEvaluator:
+    """Chunk-wise accumulator returning the *same* dict as :func:`evaluate_forecast`.
+
+    Why this exists: for a wide dataset the full ``(N, S, τ, D)`` sample tensor is
+    enormous — Electricity (N≈5k, S=100, τ=24, D=321) is ~300 GB — so we cannot score
+    every test window at once. Every metric here is a uniform **mean over the (N·τ·D)
+    positions** (pinball is additionally a mean over a fixed q-grid, which commutes with
+    the position-mean). A mean over the whole test set is therefore the
+    position-count-weighted average of the per-chunk means, so we fold one chunk at a
+    time — accumulating ``metric(chunk) × n_positions(chunk)`` — and divide by the total
+    at the end. The result equals the all-at-once computation up to floating-point
+    summation order; CRPS / coverage / width are *exact*, since each position's score
+    depends only on its own samples, never on other windows.
+
+    Use via :func:`evaluate_streaming`, or directly: construct, ``update`` per chunk,
+    then read ``result()``.
+    """
+
+    def __init__(self, mase_scale: ArrayLike, levels: Iterable[float] = (0.5, 0.9)) -> None:
+        self.scale = np.asarray(mase_scale, dtype=np.float64)
+        self.levels = tuple(levels)
+        self.n = 0          # total positions folded in (N·τ·D)
+        self._abs = 0.0     # Σ |err|
+        self._sq = 0.0      # Σ err²
+        self._mase = 0.0    # Σ |err| / scale
+        self._crps = 0.0    # Σ crps_position
+        self._pin = 0.0     # Σ pinball_position (grid-averaged)
+        self._cov = {lv: 0.0 for lv in self.levels}
+        self._wid = {lv: 0.0 for lv in self.levels}
+
+    def update(self, y_true: ArrayLike, point: ArrayLike, samples: ArrayLike) -> None:
+        """Fold one chunk of windows into the running totals.
+
+        ``y_true``/``point`` are ``(C, τ, D)`` and ``samples`` is ``(C, S, τ, D)`` for a
+        chunk of ``C`` windows — the same layout :func:`evaluate_forecast` expects, just
+        with ``C`` in place of the full ``N``.
+        """
+        y_true = np.asarray(y_true, dtype=np.float64)
+        n = int(y_true.size)  # C·τ·D positions in this chunk
+        if n == 0:
+            return
+        self.n += n
+        self._abs += mae(y_true, point) * n
+        self._sq += rmse(y_true, point) ** 2 * n
+        self._mase += mase(y_true, point, self.scale) * n
+        self._crps += crps_ensemble(y_true, samples) * n
+        self._pin += pinball_loss(y_true, samples) * n
+        for lv in self.levels:
+            self._cov[lv] += interval_coverage(y_true, samples, lv) * n
+            self._wid[lv] += interval_width(samples, lv) * n
+
+    def result(self) -> dict[str, float]:
+        """Finalize and return the same ``{name: value}`` dict as :func:`evaluate_forecast`."""
+        if self.n == 0:
+            raise RuntimeError("ForecastEvaluator.result() called before any window was scored.")
+        out: dict[str, float] = {
+            "MAE": self._abs / self.n,
+            "RMSE": float(np.sqrt(self._sq / self.n)),
+            "MASE": self._mase / self.n,
+            "CRPS": self._crps / self.n,
+            "pinball": self._pin / self.n,
+        }
+        for lv in self.levels:
+            pct = int(round(lv * 100))
+            out[f"cov{pct}"] = self._cov[lv] / self.n
+            out[f"width{pct}"] = self._wid[lv] / self.n
+        return out
+
+
+def evaluate_streaming(
+    dataset,
+    model,
+    split: str,
+    mase_scale: ArrayLike,
+    chunk_size: int,
+    scaled: bool = False,
+    levels: Iterable[float] = (0.5, 0.9),
+) -> tuple[dict[str, float], int]:
+    """Score ``model`` on a split in memory-bounded chunks; return ``(metrics, n_windows)``.
+
+    Streams ``dataset.iter_windows(split, chunk_size, scaled)``; for each chunk it calls
+    the shared forecaster interface ``model.predict(contexts) -> (point, samples)`` and
+    folds the result into a :class:`ForecastEvaluator`. At most ``chunk_size`` windows'
+    worth of samples live at once, so this scales to Electricity's 321 channels where the
+    eager :meth:`~src.data.contract.ForecastDataset.windows` path would need hundreds of
+    GB. ``metrics`` is identical in shape to :func:`evaluate_forecast`'s output.
+    """
+    ev = ForecastEvaluator(mase_scale, levels=levels)
+    n_windows = 0
+    for ctx, tgt in dataset.iter_windows(split, chunk_size, scaled=scaled):
+        point, samples = model.predict(ctx)
+        ev.update(tgt, point, samples)
+        n_windows += int(ctx.shape[0])
+    return ev.result(), n_windows
