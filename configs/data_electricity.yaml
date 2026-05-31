@@ -37,4 +37,13 @@ window:
 scaling:
   method: "standardize"     # per-channel z-score; FIT ON TRAIN ONLY
 
+eval:
+  # Seasonal period m for the M0 seasonal-naive forecast AND the MASE denominator.
+  # ONE value per dataset, shared by every model so MASE is comparable cell-for-cell
+  # (the denominator is a data-level constant, plan §6). Hourly load has a strong
+  # daily cycle -> m=24 (yesterday-same-hour) is the natural seasonal naive. The
+  # weekly naive (m=168, day-of-week aware) is available via --season 168 as an
+  # ablation; 24 is the headline so MASE matches the electricity_nips pred. length.
+  season_length: 24
+
 seed: 42

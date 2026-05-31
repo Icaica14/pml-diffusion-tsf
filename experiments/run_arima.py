@@ -11,8 +11,9 @@ channels) and logged both to the console and to ``results/arima_orders_exchange.
 
 Usage::
 
-    python -m experiments.run_arima                      # Exchange, auto order per channel
-    python -m experiments.run_arima --order 1,1,1        # fix ARIMA(1,1,1) everywhere
+    python -m experiments.run_arima                                         # Exchange, auto order per channel
+    python -m experiments.run_arima --config configs/data_electricity.yaml  # Electricity (321 channels)
+    python -m experiments.run_arima --order 1,1,1                           # fix ARIMA(1,1,1) everywhere
     python -m experiments.run_arima --samples 200
 """
 
@@ -29,7 +30,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT))
 
-from src.data.exchange import load_exchange  # noqa: E402
+from src.data.loader import build_dataset  # noqa: E402
 from src.eval.metrics import evaluate_forecast, seasonal_naive_scale  # noqa: E402
 from src.eval.registry import append_result  # noqa: E402
 from src.models.classical import ClassicalForecaster  # noqa: E402
@@ -58,6 +59,13 @@ def main() -> None:
         "each channel's order by AIC.",
     )
     parser.add_argument("--samples", type=int, default=100, help="Gaussian predictive samples per window.")
+    parser.add_argument(
+        "--season",
+        type=int,
+        default=None,
+        help="Seasonal lag m for the MASE denominator. Default: eval.season_length "
+        "from the config — kept identical to M0 so MASE is comparable cell-for-cell.",
+    )
     parser.add_argument("--seed", type=int, default=None, help="Override the config seed.")
     parser.add_argument("--registry", default=str(REPO_ROOT / "results" / "registry.csv"))
     args = parser.parse_args()
@@ -68,7 +76,11 @@ def main() -> None:
     seed = args.seed if args.seed is not None else int(cfg.get("seed", 42))
     set_seed(seed)
 
-    ds = load_exchange(cfg)
+    ds = build_dataset(cfg)
+
+    # Seasonal lag m for MASE: CLI override, else the dataset's eval.season_length —
+    # kept identical to M0 (the denominator is a data-level constant, plan §6).
+    season = args.season if args.season is not None else int(cfg.get("eval", {}).get("season_length", 1))
 
     # Metrics are read on the ORIGINAL scale → fit and forecast on raw values.
     train_series = ds.raw_splits["train"]
@@ -88,7 +100,7 @@ def main() -> None:
     predict_s = time.perf_counter() - t0
 
     # MASE denominator is a data-level constant: identical to M0 for comparability.
-    scale = seasonal_naive_scale(train_series, season_length=1)
+    scale = seasonal_naive_scale(train_series, season_length=season)
     metrics = evaluate_forecast(te_tgt, point, samples, scale, levels=(0.5, 0.9))
 
     # Compact, human-readable summary of the per-channel orders for the registry row.
@@ -100,6 +112,7 @@ def main() -> None:
         "model": "arima",
         "order": "auto" if order is None else f"{order[0]}.{order[1]}.{order[2]}",
         "orders_per_channel": orders_str,
+        "season_length": season,
         "split": "test",
         "n_windows": int(te_tgt.shape[0]),
         "H": ds.H,

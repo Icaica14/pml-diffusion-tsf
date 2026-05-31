@@ -8,8 +8,9 @@ exactly one provenance-tagged row.
 
 Usage::
 
-    python -m experiments.run_naive                     # Exchange, persistence (m=1)
-    python -m experiments.run_naive --season 5 --samples 200
+    python -m experiments.run_naive                                         # Exchange, m=1 (from config)
+    python -m experiments.run_naive --config configs/data_electricity.yaml  # Electricity, m=24 (from config)
+    python -m experiments.run_naive --season 168 --samples 200              # weekly-naive ablation
 """
 
 from __future__ import annotations
@@ -24,7 +25,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT))
 
-from src.data.exchange import load_exchange  # noqa: E402
+from src.data.loader import build_dataset  # noqa: E402
 from src.eval.metrics import evaluate_forecast, seasonal_naive_scale  # noqa: E402
 from src.eval.registry import append_result  # noqa: E402
 from src.models.naive import SeasonalNaiveForecaster  # noqa: E402
@@ -38,9 +39,10 @@ def main() -> None:
     parser.add_argument(
         "--season",
         type=int,
-        default=1,
-        help="Seasonal lag m. Default 1 (persistence) — the honest naive for the "
-        "near-random-walk Exchange series (see docs/EDA_EXCHANGE.md).",
+        default=None,
+        help="Seasonal lag m. Default: read eval.season_length from the config "
+        "(1 for Exchange's near-random-walk; 24 for hourly Electricity). Pass an "
+        "explicit value to override for an ablation (e.g. 168 = weekly naive).",
     )
     parser.add_argument("--samples", type=int, default=100, help="Bootstrap samples per window.")
     parser.add_argument("--seed", type=int, default=None, help="Override the config seed.")
@@ -51,14 +53,18 @@ def main() -> None:
     seed = args.seed if args.seed is not None else int(cfg.get("seed", 42))
     set_seed(seed)
 
-    ds = load_exchange(cfg)
+    ds = build_dataset(cfg)
+
+    # Seasonal lag m: CLI override, else the dataset's eval.season_length (the value
+    # M0's forecast AND every model's MASE denominator share, for comparability).
+    season = args.season if args.season is not None else int(cfg.get("eval", {}).get("season_length", 1))
 
     # Metrics are read on the ORIGINAL scale → use raw (un-scaled) windows.
     tr_ctx, tr_tgt = ds.windows("train", scaled=False)
     te_ctx, te_tgt = ds.windows("test", scaled=False)
 
     model = SeasonalNaiveForecaster(
-        season_length=args.season,
+        season_length=season,
         horizon=ds.tau,
         n_samples=args.samples,
         seed=seed,
@@ -68,14 +74,14 @@ def main() -> None:
     point, samples = model.predict(te_ctx)
     predict_s = time.perf_counter() - t0
 
-    scale = seasonal_naive_scale(ds.raw_splits["train"], args.season)
+    scale = seasonal_naive_scale(ds.raw_splits["train"], season)
     metrics = evaluate_forecast(te_tgt, point, samples, scale, levels=(0.5, 0.9))
 
     row = {
         "timestamp": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "dataset": ds.name,
         "model": "seasonal_naive",
-        "season_length": args.season,
+        "season_length": season,
         "split": "test",
         "n_windows": int(te_tgt.shape[0]),
         "H": ds.H,
@@ -93,7 +99,7 @@ def main() -> None:
     ds.save_manifest(REPO_ROOT / "results" / f"manifest_{ds.name}.json")
 
     # Console summary.
-    print(f"M0 seasonal-naive (m={args.season})  ·  {ds.name}  ·  test split")
+    print(f"M0 seasonal-naive (m={season})  ·  {ds.name}  ·  test split")
     print(f"  windows={row['n_windows']}  H={ds.H}  tau={ds.tau}  D={ds.D}  "
           f"S={args.samples}  seed={seed}")
     print("  point   : "

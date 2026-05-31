@@ -36,4 +36,12 @@ window:
 scaling:
   method: "standardize"     # per-channel z-score; FIT ON TRAIN ONLY, applied to val/test
 
+eval:
+  # Seasonal period m for the M0 seasonal-naive forecast AND the MASE denominator.
+  # ONE value per dataset, shared by every model so MASE is comparable cell-for-cell
+  # (the denominator is a data-level constant, plan §6). Exchange is near-random-walk
+  # (lag-1 autocorr ~0.999, see docs/EDA_EXCHANGE.md) -> m=1 (persistence) is the
+  # honest naive. A runner may still override with --season for an ablation.
+  season_length: 1
+
 seed: 42

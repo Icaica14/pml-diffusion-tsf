@@ -12,7 +12,8 @@ internally); per-window forecasts reuse the trained predictor with no refit.
 
 Usage (on a machine with the heavy group installed)::
 
-    python -m experiments.run_deepar                     # Exchange, default budget
+    python -m experiments.run_deepar                                         # Exchange, default budget
+    python -m experiments.run_deepar --config configs/data_electricity.yaml  # Electricity (321 channels)
     python -m experiments.run_deepar --epochs 30 --samples 200
 """
 
@@ -28,7 +29,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT))
 
-from src.data.exchange import load_exchange  # noqa: E402
+from src.data.loader import build_dataset  # noqa: E402
 from src.eval.metrics import evaluate_forecast, seasonal_naive_scale  # noqa: E402
 from src.eval.registry import append_result  # noqa: E402
 from src.models.deepar import DeepARForecaster  # noqa: E402
@@ -51,6 +52,9 @@ def main() -> None:
                              "time features are spurious; this is the M2-tuned variant.")
     parser.add_argument("--accelerator", default="auto",
                         help="Lightning accelerator: 'auto' (GPU on Colab), 'gpu', or 'cpu'.")
+    parser.add_argument("--season", type=int, default=None,
+                        help="Seasonal lag m for the MASE denominator. Default: "
+                             "eval.season_length from the config (identical to M0/M1).")
     parser.add_argument("--seed", type=int, default=None, help="Override the config seed.")
     parser.add_argument("--registry", default=str(REPO_ROOT / "results" / "registry.csv"))
     args = parser.parse_args()
@@ -59,7 +63,8 @@ def main() -> None:
     seed = args.seed if args.seed is not None else int(cfg.get("seed", 42))
     set_seed(seed)
 
-    ds = load_exchange(cfg)
+    ds = build_dataset(cfg)
+    season = args.season if args.season is not None else int(cfg.get("eval", {}).get("season_length", 1))
 
     # Train on the raw train series via the contract's GluonTS bridge (GluonTS scales
     # internally, so it consumes the un-scaled series). Metrics read the raw test set.
@@ -91,7 +96,7 @@ def main() -> None:
     predict_s = time.perf_counter() - t0
 
     # MASE denominator is a data-level constant: identical to M0/M1 for comparability.
-    scale = seasonal_naive_scale(ds.raw_splits["train"], season_length=1)
+    scale = seasonal_naive_scale(ds.raw_splits["train"], season_length=season)
     metrics = evaluate_forecast(te_tgt, point, samples, scale, levels=(0.5, 0.9))
 
     # Distinct label for the tuned (no-calendar-features) variant so the two DeepAR
@@ -102,6 +107,7 @@ def main() -> None:
         "timestamp": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "dataset": ds.name,
         "model": model_name,
+        "season_length": season,
         "split": "test",
         "n_windows": int(te_tgt.shape[0]),
         "H": ds.H,
