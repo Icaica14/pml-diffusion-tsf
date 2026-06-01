@@ -80,7 +80,11 @@ def _train_full_weights(estimator, train_dataset):
     orig_load = torch.load
 
     def _load_full(*args, **kwargs):
-        kwargs.setdefault("weights_only", False)
+        # FORCE, don't setdefault: Lightning's cloud_io passes weights_only=True
+        # *explicitly* to torch.load, so setdefault would leave it True and still fail.
+        # During train() the only checkpoint loaded is the one we just wrote (trusted),
+        # so we always want the full (pre-2.6) unpickling path here.
+        kwargs["weights_only"] = False
         return orig_load(*args, **kwargs)
 
     torch.load = _load_full
