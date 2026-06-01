@@ -1,0 +1,5 @@
+dataset,code,model,is_placeholder,MASE,CRPS,pinball,cov50,cov90,width50,width90,MAE,RMSE,fit_s,predict_s,epochs,diff_steps,num_cells,layers,input_size,hidden,n_windows,H,tau,D,n_samples,seed,season_length,platform
+exchange,M0,seasonal_naive,False,4.5263,0.007175,0.00379,0.444543,0.862284,0.016123,0.044464,0.009812,0.016592,,0.4928,,,,,,,1430,60,30,8,100,42,1.0,macOS-14.7.3-x86_64-i386-64bit
+exchange,M1,arima,False,4.524945,0.007249,0.003831,0.633488,0.931777,0.020514,0.04923,0.009817,0.016578,17.0932,45.2018,,,,,,,1430,60,30,8,100,42,,macOS-14.7.3-x86_64-i386-64bit
+exchange,M2,deepar,False,7.406757,0.010253,0.005416,0.392378,0.828421,0.015901,0.050004,0.014126,0.021846,57.9757,28.057,20.0,,,2.0,,40.0,1430,60,30,8,100,42,1.0,Linux-6.6.122+-x86_64-with-glibc2.35
+exchange,M3,timegrad,False,7.478329,0.011339,0.005958,0.384076,0.729199,0.015336,0.039759,0.015043,0.023827,132.7548,743.986,20.0,100.0,64.0,2.0,34.0,,1430,60,30,8,100,42,1.0,Linux-6.6.122+-x86_64-with-glibc2.35

@@ -1,0 +1,5 @@
+dataset,code,model,is_placeholder,MASE,CRPS,pinball,cov50,cov90,width50,width90,MAE,RMSE,fit_s,predict_s,epochs,diff_steps,num_cells,layers,input_size,hidden,n_windows,H,tau,D,n_samples,seed,season_length,platform
+electricity,M0,seasonal_naive,False,1.002524,160.545026,84.560422,0.496796,0.885313,204.66339,934.742721,203.035906,1759.698511,,3520.514,,,,,,,5071.0,168.0,24.0,321.0,100.0,42.0,24.0,macOS-14.7.3-x86_64-i386-64bit
+electricity,M1,arima,False,3.663796,867.503358,458.998943,0.592416,0.930261,2462.958253,5909.533434,1131.908938,12870.594014,1758.5334,9719.5063,,,,,,,5071.0,168.0,24.0,321.0,100.0,42.0,24.0,macOS-14.7.3-x86_64-i386-64bit
+electricity,M2,deepar,False,1.8299,253.694,133.9232,0.466,0.831,447.4283,1231.6246,356.0154,2448.7777,608.8,4930.0,50.0,,,2.0,,40.0,5071.0,168.0,24.0,321.0,100.0,42.0,24.0,Linux-6.6.122+-x86_64-with-glibc2.35
+electricity,M3,timegrad,True,1.53,210.0,110.0,0.49,0.87,430.0,1150.0,300.0,2300.0,1800.0,10800.0,50.0,100.0,,,,,,,,,,,,Colab Pro (L4)

@@ -31,6 +31,11 @@ import pandas as pd  # noqa: E402
 REPO_ROOT = Path(__file__).resolve().parents[1]
 REGISTRY = REPO_ROOT / "results" / "registry.csv"
 FIGDIR = REPO_ROOT / "figures"
+# This is the Exchange sandbox figure set. Once the registry also holds Electricity
+# rows, filtering by dataset is mandatory — otherwise the bars mix two incomparable
+# scales (Exchange CRPS≈0.007 vs Electricity≈160). Electricity figures live in
+# experiments/plot_presentation.py (dataset-aware, with M3 placeholder handling).
+DATASET = "exchange"
 
 # Fixed model order + a stable colour/label per model, so a reader learns the code
 # once ("red = TimeGrad") and reads every figure the same way.
@@ -71,7 +76,7 @@ plt.rcParams.update({
 
 def _load() -> pd.DataFrame:
     df = pd.read_csv(REGISTRY)
-    df = df[df["model"].isin(ORDER)].copy()
+    df = df[(df["dataset"] == DATASET) & (df["model"].isin(ORDER))].copy()
     df["model"] = pd.Categorical(df["model"], categories=ORDER, ordered=True)
     df = df.sort_values("model").reset_index(drop=True)
     return df
