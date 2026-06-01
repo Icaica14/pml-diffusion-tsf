@@ -49,7 +49,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from src.models._compat import gluonts_freq
+from src.utils.freq import gluonts_freq
 
 
 def _import_pts():

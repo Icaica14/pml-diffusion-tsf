@@ -65,8 +65,20 @@ def load_gz_csv(path: str | Path) -> pd.DataFrame:
 
 
 def attach_calendar(df: pd.DataFrame, start_date: str, freq: str) -> pd.DataFrame:
-    """Give the values a *nominal* DatetimeIndex (for calendar features only)."""
-    idx = pd.date_range(start=start_date, periods=len(df), freq=freq)
+    """Give the values a *nominal* DatetimeIndex (for calendar features only).
+
+    The heavy (M2/M3) Colab env pins ``pandas < 2.2`` for GluonTS 0.13, and that older
+    pandas rejects the modern lowercase sub-daily aliases the configs use (Electricity's
+    ``freq="h"`` -> ``ValueError``). When that happens we retry with the legacy spelling
+    (:func:`src.utils.freq.gluonts_freq`, ``"h"`` -> ``"H"``); the light/local env keeps
+    pandas >= 2.2 and takes the first branch unchanged.
+    """
+    try:
+        idx = pd.date_range(start=start_date, periods=len(df), freq=freq)
+    except ValueError:
+        from src.utils.freq import gluonts_freq
+
+        idx = pd.date_range(start=start_date, periods=len(df), freq=gluonts_freq(freq))
     out = df.copy()
     out.index = idx
     return out

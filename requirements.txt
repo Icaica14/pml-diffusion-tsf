@@ -48,8 +48,18 @@ PuLP>=2.7                 # swap for cvxpy if a richer model is needed (plan §6
 #   numpy<2                # gluonts 0.13 needs numpy 1.x (got 1.26.4); this also pulls
 #                          # pydantic 1.x + protobuf 3.x transitively. pip will warn
 #                          # about unrelated Colab packages (jax/tf/...) — benign.
+#   pandas<2.2             # gluonts 0.13's freq handling predates pandas 2.2. pandas
+#                          # >= 2.2 lowercased the sub-daily aliases AND re-normalizes
+#                          # to_offset("H").name back to "h", so gluonts's uppercase
+#                          # dispatch raises "invalid frequency" on Electricity's
+#                          # freq="h" no matter the input case — pinning <2.2 aligns
+#                          # the env with gluonts 0.13's era. (src/utils/freq.py still
+#                          # translates "h"->"H" at the gluonts boundary.)
 #
-# Gotcha (handled in code): GluonTS 0.13 reloads its best checkpoint via torch.load;
+# Gotcha 1 (handled in code): GluonTS 0.13 reloads its best checkpoint via torch.load;
 # PyTorch >= 2.6 defaults weights_only=True and refuses the pickled StudentTOutput.
 # src/models/deepar.py patches torch.load(weights_only=False) around estimator.train().
+# Gotcha 2 (handled in code): older pandas (<2.2, above) rejects the modern lowercase
+# offset alias in pd.date_range; src/data/loader.py:attach_calendar falls back to the
+# legacy spelling via src/utils/freq.py when that ValueError fires.
 # =============================================================================
