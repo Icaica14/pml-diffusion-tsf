@@ -30,7 +30,7 @@ Library & environment
 ---------------------
 Built on **PyTorchTS** (``pts``), a PyTorch forecasting library that reuses GluonTS's
 data/transform machinery. PyTorchTS's pinning against a *specific* GluonTS version is
-fragile (see ``requirements.txt`` and ``notebooks/colab_m3_timegrad.ipynb``); the exact
+fragile (see ``requirements.txt`` and ``notebooks/colab_m2_m3.ipynb``); the exact
 known-good combo is pinned in the Colab notebook, not the light env. All ``pts`` /
 GluonTS imports are deferred into the methods so the light env still imports this module
 (the guarded tests skip when ``pts`` is absent), mirroring M2.
@@ -64,7 +64,7 @@ def _import_pts():
         raise ImportError(
             "M3 TimeGrad needs the heavy group (pytorchts + a matching gluonts), which "
             "is not in the light local env. Install the pinned combo on the Colab/GPU "
-            "box (see requirements.txt and notebooks/colab_m3_timegrad.ipynb) before "
+            "box (see requirements.txt and notebooks/colab_m2_m3.ipynb) before "
             "running run_timegrad.py."
         ) from exc
     return TimeGradEstimator, Trainer, ListDataset

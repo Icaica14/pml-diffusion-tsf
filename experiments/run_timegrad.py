@@ -11,7 +11,7 @@ Unlike M2 (D univariate DeepARs), TimeGrad is **multivariate**: it denoises the 
 D-vector, so it consumes ``ds.to_gluonts_multivariate("train")``. Per-window forecasts
 reuse the trained predictor with no refit (leakage-free, identical to M1/M2).
 
-Usage (on the Colab/GPU box with the pinned heavy group — see the M3 notebook)::
+Usage (on the Colab/GPU box with the pinned heavy group — see notebooks/colab_m2_m3.ipynb)::
 
     python -m experiments.run_timegrad                                         # Exchange, default budget
     python -m experiments.run_timegrad --config configs/data_electricity.yaml  # Electricity (321 channels)
