@@ -35,10 +35,21 @@ PuLP>=2.7                 # swap for cvxpy if a richer model is needed (plan §6
 
 # =============================================================================
 # --- heavy / Colab group — DO NOT install in the light env (versions fragile) ---
-# These are pinned on the GPU box once a known-good combo is verified (plan §8.2).
-# Left commented so `pip install -r requirements.txt` stays laptop-safe.
+# Installed on the Colab GPU box by notebooks/colab_m2_m3.ipynb, NOT here, so
+# `pip install -r requirements.txt` stays laptop-safe.
+#
+# Verified working on Colab — 2026-06, Tesla T4, Python 3.12:
+#   torch                  use Colab's preinstalled CUDA build (was 2.11.0+cu128);
+#                          do NOT pin/reinstall it (keeps CUDA matched to the box).
+#   gluonts[torch]==0.13.7   # M2 DeepAR  (pulls a Lightning compatible with 0.13)
+#   pytorch-ts @ git+https://github.com/zalandoresearch/pytorch-ts.git@81be06bcc
+#                          # M3 TimeGrad backend; install with --no-deps so it does
+#                          # not drag an older gluonts back in.
+#   numpy<2                # gluonts 0.13 needs numpy 1.x (got 1.26.4); this also pulls
+#                          # pydantic 1.x + protobuf 3.x transitively. pip will warn
+#                          # about unrelated Colab packages (jax/tf/...) — benign.
+#
+# Gotcha (handled in code): GluonTS 0.13 reloads its best checkpoint via torch.load;
+# PyTorch >= 2.6 defaults weights_only=True and refuses the pickled StudentTOutput.
+# src/models/deepar.py patches torch.load(weights_only=False) around estimator.train().
 # =============================================================================
-# torch                   # pin to the Colab CUDA build
-# gluonts                 # M2 — DeepAR
-# pytorchts               # M3 — TimeGrad  (pin against the matching gluonts!)
-# --- pinned known-good combo: TBD, record here once verified on Colab ---

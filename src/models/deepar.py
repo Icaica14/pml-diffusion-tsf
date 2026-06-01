@@ -61,6 +61,35 @@ def _import_gluonts():
     return DeepAREstimator, ListDataset
 
 
+def _train_full_weights(estimator, train_dataset):
+    """Run a GluonTS Lightning ``estimator.train`` under ``torch.load(weights_only=False)``.
+
+    GluonTS 0.13's torch estimator reloads its **own** best checkpoint at the end of
+    training (to return the best epoch, not the last). PyTorch >= 2.6 flipped that
+    ``torch.load`` call's default to ``weights_only=True``, which refuses to unpickle the
+    gluonts distribution-output object (``StudentTOutput``) stored in the checkpoint's
+    hyper-parameters and raises ``UnpicklingError``. Colab ships a torch well past 2.6,
+    so M2 hits this while M3 (PyTorchTS, with its own Trainer) does not.
+
+    The checkpoint is one we just wrote this run (trusted), so we restore the pre-2.6
+    behaviour for the duration of ``train()`` only, then put ``torch.load`` back. This
+    mirrors the library-version shims in ``timegrad.py``.
+    """
+    import torch
+
+    orig_load = torch.load
+
+    def _load_full(*args, **kwargs):
+        kwargs.setdefault("weights_only", False)
+        return orig_load(*args, **kwargs)
+
+    torch.load = _load_full
+    try:
+        return estimator.train(train_dataset)
+    finally:
+        torch.load = orig_load
+
+
 @dataclass
 class DeepARForecaster:
     """A thin, contract-aware wrapper around GluonTS ``gluonts.torch`` DeepAR (M2).
@@ -140,7 +169,9 @@ class DeepARForecaster:
             },
             **extra_kwargs,
         )
-        self.predictor_ = estimator.train(train_dataset)
+        # PyTorch >= 2.6 (Colab) defaults torch.load to weights_only=True, which breaks
+        # GluonTS 0.13's end-of-training best-checkpoint reload; see _train_full_weights.
+        self.predictor_ = _train_full_weights(estimator, train_dataset)
         return self
 
     # -- predict --------------------------------------------------------------
