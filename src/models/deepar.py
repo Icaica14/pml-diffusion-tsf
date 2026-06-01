@@ -42,6 +42,8 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
+from src.models._compat import gluonts_freq
+
 
 def _import_gluonts():
     """Deferred import of the GluonTS pieces (heavy group only).
@@ -156,7 +158,9 @@ class DeepARForecaster:
         extra_kwargs = {"time_features": []} if self.disable_time_features else {}
 
         estimator = DeepAREstimator(
-            freq=self.freq,
+            # gluonts_freq: GluonTS 0.13 only knows the legacy uppercase sub-daily
+            # aliases ("H"), not pandas >= 2.2's "h" (Electricity) -> translate here.
+            freq=gluonts_freq(self.freq),
             prediction_length=self.horizon,
             context_length=self.context_length,
             num_layers=self.num_layers,
@@ -207,7 +211,7 @@ class DeepARForecaster:
             for i in range(N)
             for d in range(D)
         ]
-        pred_ds = ListDataset(entries, freq=self.freq)
+        pred_ds = ListDataset(entries, freq=gluonts_freq(self.freq))
         forecasts = list(self.predictor_.predict(pred_ds, num_samples=self.n_samples))
         if len(forecasts) != N * D:
             raise RuntimeError(

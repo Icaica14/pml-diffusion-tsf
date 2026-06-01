@@ -49,6 +49,8 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
+from src.models._compat import gluonts_freq
+
 
 def _import_pts():
     """Deferred import of the PyTorchTS / GluonTS pieces (heavy group only).
@@ -178,8 +180,11 @@ class TimeGradForecaster:
             time_features_from_frequency_str,
         )
 
-        n_lags = len(get_lags_for_frequency(self.freq))
-        n_time_feat = len(time_features_from_frequency_str(self.freq))
+        # gluonts_freq: GluonTS 0.13's lag/time-feature helpers reject pandas >= 2.2's
+        # lowercase sub-daily aliases ("h"); translate to the legacy "H" they expect.
+        gfreq = gluonts_freq(self.freq)
+        n_lags = len(get_lags_for_frequency(gfreq))
+        n_time_feat = len(time_features_from_frequency_str(gfreq))
         return self.target_dim * n_lags + n_time_feat + 1
 
     def _build_estimator(self, input_size: int):
@@ -195,7 +200,7 @@ class TimeGradForecaster:
             num_cells=self.num_cells,
             num_layers=self.num_layers,
             input_size=input_size,
-            freq=self.freq,
+            freq=gluonts_freq(self.freq),
             loss_type=self.loss_type,
             scaling=self.scaling,
             diff_steps=self.diff_steps,
@@ -333,7 +338,7 @@ class TimeGradForecaster:
             {"start": self.start, "target": contexts[i].T.astype("float32")}
             for i in range(N)
         ]
-        pred_ds = ListDataset(entries, freq=self.freq, one_dim_target=False)
+        pred_ds = ListDataset(entries, freq=gluonts_freq(self.freq), one_dim_target=False)
         forecasts = list(self.predictor_.predict(pred_ds, num_samples=self.n_samples))
         if len(forecasts) != N:
             raise RuntimeError(
