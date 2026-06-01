@@ -57,6 +57,10 @@ def main() -> None:
     parser.add_argument("--epochs", type=int, default=20, help="pts Trainer epochs.")
     parser.add_argument("--batches", type=int, default=50, help="num_batches_per_epoch.")
     parser.add_argument("--batch-size", type=int, default=32)
+    parser.add_argument("--predict-batch-size", type=int, default=16,
+                        help="Windows per GPU batch at predict/sampling time (memory "
+                             "cap; does NOT change forecasts). Lower it (e.g. 8) if the "
+                             "sampler still OOMs on a wide series like Electricity.")
     parser.add_argument("--num-cells", type=int, default=64, help="Conditioning RNN width.")
     parser.add_argument("--layers", type=int, default=2, help="Conditioning RNN layers.")
     parser.add_argument("--cell-type", default="GRU", help="RNN cell: 'GRU' or 'LSTM'.")
@@ -107,6 +111,7 @@ def main() -> None:
         num_batches_per_epoch=args.batches,
         batch_size=args.batch_size,
         n_samples=args.samples,
+        predict_batch_size=args.predict_batch_size,
         input_size=args.input_size,
         device=device,
         seed=seed,

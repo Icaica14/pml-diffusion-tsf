@@ -119,6 +119,12 @@ class TimeGradForecaster:
     scaling : let TimeGrad mean-scale each series internally (as DeepAR does).
     max_epochs, num_batches_per_epoch, batch_size, lr : the training budget.
     n_samples : number ``S`` of sampled trajectories drawn per window at predict time.
+    predict_batch_size : windows pushed through the sampler per GPU batch at predict
+        time. ``None`` keeps the predictor's trained default; a small int (e.g. 16) caps
+        sampling-time GPU memory for wide multivariate series (D=321 Electricity) without
+        touching training — batch size changes only memory/speed, never the sampled
+        values. Paired with a cache release after ``fit`` it avoids the predict-time CUDA
+        OOM seen on an L4 (training leaves a large reserved-but-unallocated cache).
     input_size : the RNN input width. This is TimeGrad's notorious must-match argument;
         left ``None`` it is computed from the GluonTS lags for ``freq`` plus the feature
         count. If ``pts`` raises a dimension-mismatch the message states the expected
@@ -157,6 +163,7 @@ class TimeGradForecaster:
     batch_size: int = 32
     lr: float = 1e-3
     n_samples: int = 100
+    predict_batch_size: int | None = None
     input_size: int | None = None
     device: str = "cuda"
     seed: int = 0
@@ -305,7 +312,27 @@ class TimeGradForecaster:
             self.predictor_ = self._train(estimator, train_dataset)
 
         self.input_size_ = size
+        # Release the CUDA cache before sampling. TimeGrad's training leaves a large
+        # reserved-but-unallocated cache (observed ~19 GiB on an L4); the predict-time
+        # sampler then OOMs requesting a *small* block it cannot fit into the fragmented
+        # pool. Dropping the cache here (and capping the predict batch in ``predict``)
+        # keeps sampling within budget without touching training at all.
+        self._free_cuda_cache()
         return self
+
+    @staticmethod
+    def _free_cuda_cache() -> None:
+        """Best-effort release of cached CUDA memory between fit and predict."""
+        import gc
+
+        gc.collect()
+        try:
+            import torch
+
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+        except Exception:  # pragma: no cover - torch absent / CPU-only
+            pass
 
     # -- predict --------------------------------------------------------------
     def predict(self, contexts: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
@@ -339,6 +366,16 @@ class TimeGradForecaster:
             for i in range(N)
         ]
         pred_ds = ListDataset(entries, freq=gluonts_freq(self.freq), one_dim_target=False)
+        # Cap the *prediction* batch so sampling ``n_samples`` trajectories for a D-dim
+        # series stays within GPU memory. This only rewrites the predictor's batch size:
+        # the trained weights and every forecast value are unchanged (batch size affects
+        # memory/speed, never the samples). ``None`` leaves the trained default.
+        if self.predict_batch_size is not None:
+            try:
+                self.predictor_.batch_size = int(self.predict_batch_size)
+            except Exception:  # pragma: no cover - predictor without a batch_size attr
+                pass
+        self._free_cuda_cache()
         forecasts = list(self.predictor_.predict(pred_ds, num_samples=self.n_samples))
         if len(forecasts) != N:
             raise RuntimeError(
