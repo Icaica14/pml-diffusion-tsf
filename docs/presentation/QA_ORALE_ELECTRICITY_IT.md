@@ -4,8 +4,10 @@
 > onesto e non trionfalista. I numeri vengono da
 > [`RESULTS_PLACEHOLDERS_ELECTRICITY.md`](RESULTS_PLACEHOLDERS_ELECTRICITY.md).
 >
-> 🔴 Dove c'è M3, in Fase A si risponde "run in corso"; in Fase B si inserisce il
-> numero reale. `[PLACEHOLDER M3 — aggiornare appena disponibile results/registry.csv]`
+> **Fase B:** M3 (TimeGrad, CRPS 241.6) e M4 (TimeDiff, CRPS 287.3) sono numeri reali —
+> niente più "run in corso". M4 ha un *doppio volto* (punto nitido, distribuzione
+> collassata): vedi Q8, Q16-bis, Q34-bis. Analisi numerica in
+> [`RESULTS_PLACEHOLDERS_ELECTRICITY.md`](RESULTS_PLACEHOLDERS_ELECTRICITY.md) §5.
 >
 > Categorie: **(I)** probabilistico & metodo · **(II)** modelli & diffusione ·
 > **(III)** risultati & interpretazione · **(IV)** metriche & valutazione ·
@@ -59,9 +61,16 @@ rumore puro (è fisso, non si impara). Il **reverse** è quello che la rete impa
 rumore un passo alla volta per ricostruire un campione realistico.
 
 **Q8. Perché la rete predice il rumore e non direttamente il dato pulito?**
-Perché predire il rumore aggiunto a ogni passo rende il problema più stabile e la loss
-più semplice (un errore quadratico sul rumore), ed è equivalente a stimare il gradiente
-della densità (score). È la formulazione standard dei DDPM.
+Perché predire il rumore (ε-prediction) aggiunto a ogni passo rende il problema più
+stabile e la loss più semplice (un errore quadratico sul rumore), ed è equivalente a
+stimare il gradiente della densità (score). È la formulazione standard dei DDPM (Ho 2020),
+ed è quella di TimeGrad. **Attenzione — è il cuore del nostro risultato su TimeDiff:**
+TimeDiff invece predice il **segnale pulito** (x0-prediction), ed è proprio questa scelta
+che fa collassare la sua incertezza (vedi Q16-bis e Q34-bis). Predire ε controlla
+*esplicitamente* la dispersione iniettata a ogni passo; predire x0 la lascia residuale, e
+se la rete impara a predire un x0 quasi costante quella dispersione svanisce. La nostra
+ablazione **M4ε** verifica proprio questo: stesso modello, target ε invece di x0 → la
+calibrazione dovrebbe tornare.
 
 **Q9. Come si condiziona TimeGrad sul passato?**
 Una RNN comprime la finestra di contesto H in uno stato; quello stato entra come
@@ -73,6 +82,16 @@ DeepAR assume una **forma parametrica** della distribuzione (es. gaussiana/Stude
 canale) e la fa evolvere autoregressivamente. TimeGrad **non** assume una forma: la
 costruisce per campionamento via diffusione, quindi può rappresentare incertezza non
 gaussiana e correlazioni più ricche — al prezzo di un sampling molto più lento.
+
+**Q10-bis. Differenza tra TimeGrad (M3) e TimeDiff (M4)?**
+Sono **entrambi** diffusion model condizionati, ma con design opposto. **TimeGrad è
+autoregressivo**: genera il futuro un passo temporale alla volta, ogni passo condizionato
+sullo stato di una RNN — espressivo ma con sampling lento (τ catene di denoising in
+sequenza, ~4h19). **TimeDiff è non-autoregressivo**: denoisa l'**intero blocco futuro**
+(τ×D) in *una sola* catena inversa, con un backbone convoluzionale e un'inizializzazione
+lineare del futuro (`x_ar`). Risultato: sampling molto più rapido (~41 min). Inoltre
+TimeGrad usa ε-prediction, TimeDiff x0-prediction — differenza che spiega la calibrazione
+opposta (vedi Q8, Q16-bis).
 
 **Q11. Perché ARIMA è "un modello per canale"?**
 ARIMA è univariato: con 321 serie alleniamo 321 modelli auto-ARIMA indipendenti. Questo
@@ -103,20 +122,33 @@ Perché Electricity ha una stagionalità giornaliera/settimanale molto regolare:
 del segnale è "domani come il ciclo precedente". Il baseline cattura gratis proprio quella
 struttura; ai modelli resta solo il margine residuo, più difficile.
 
-**Q16. Quanto fa TimeGrad?** 🔴
-*Fase A:* "Il run è in corso su GPU; inseriamo il numero reale appena finisce. Sappiamo
-già la soglia da superare: CRPS 160.5." *Fase B:* inserire CRPS reale e lo scenario A/B/C.
-`[PLACEHOLDER M3 — aggiornare appena disponibile results/registry.csv]`
+**Q16. Quanto fa TimeGrad?**
+CRPS **241.6**, MASE **1.39**. **Batte DeepAR** (CRPS 253.7) ma **non** il seasonal-naive
+(160.5): è lo **Scenario A**. La calibrazione è sovra-confidente (cov50 0.279, cov90 0.647)
+e il sampling è costoso (~4h 19min su L4). Lettura: più espressività aiuta sul
+probabilistico, ma non basta a scalzare il baseline, e si paga in costo.
+
+**Q16-bis. Quanto fa TimeDiff (M4), e perché quel risultato è interessante?**
+Ha un **doppio volto**. Come *previsione puntuale* è il migliore dei deep: MAE **288.5**
+(il più basso; M2 356, M3 312.8), MASE 1.40 ≈ TimeGrad, e lo ottiene al costo più basso
+(fit ~48 s, predict ~41 min, contro le ~4h19 di TimeGrad — è il vantaggio del non-AR). **Ma
+la sua distribuzione predittiva è collassata**: cov50 0.003, cov90 0.008 (nominali 0.50 e
+0.90), ampiezze ≈ 0. Spia decisiva: **CRPS 287.3 ≈ MAE 288.5** — quando la predittiva è una
+*massa puntiforme* il CRPS si riduce alla MAE. Non è un bug: è il **collasso di varianza
+della x0-prediction** (la rete predice un x0 quasi costante e ignora il rumore; la
+future-mixup aggrava). È interessante perché isola un fenomeno didattico pulito: *la
+parametrizzazione del target (x0 vs ε) cambia la calibrazione a parità di tutto il resto.*
 
 **Q17. E se TimeGrad non batte il seasonal-naive?**
-È un esito **scientificamente valido e atteso**: dimostra che più espressività non implica
-miglior forecasting su un segnale già ben spiegato dalla stagionalità. La tesi del progetto
-— il trade-off espressività/calibrazione/costo — regge comunque (scenario A o C).
+È **esattamente il nostro caso** (Scenario A): un esito scientificamente valido, che
+dimostra come più espressività non implichi miglior forecasting su un segnale già ben
+spiegato dalla stagionalità. La tesi del progetto — il trade-off
+espressività/calibrazione/costo — regge comunque.
 
-**Q18. E se invece lo batte?**
-Allora la diffusione sfrutta struttura e incertezza non gaussiana per la miglior qualità
-probabilistica (scenario B); ma il vantaggio va pesato col costo di sampling: vale dove
-l'incertezza ha valore decisionale.
+**Q18. E se invece lo avesse battuto?** (controfattuale)
+Sarebbe stato lo scenario B: la diffusione che sfrutta struttura e incertezza non gaussiana
+per la miglior qualità probabilistica, col vantaggio sempre da pesare contro il costo di
+sampling. Non è ciò che è successo: qui M3 resta sopra M0 sul CRPS (241.6 vs 160.5).
 
 **Q19. Perché DeepAR batte ARIMA così nettamente?**
 Perché impara su tutte le serie insieme (condivide struttura), usa covariate di calendario,
@@ -208,6 +240,18 @@ Non lo escludiamo del tutto: con un solo seed e tuning limitato è una causa pos
 diciamo. Mitighiamo usando le stesse 50 epoche/condizioni di DeepAR per equità; un'analisi
 più estesa (più epoche/seed) è lavoro futuro.
 
+**Q34-bis. "TimeDiff ha coverage praticamente zero: il modello è rotto o il codice è buggato?"**
+Né l'uno né l'altro nel senso banale: il *point forecast* è ottimo (MAE la più bassa tra i
+deep), quindi training e pipeline funzionano. È la **distribuzione** a essere degenerata, e
+la causa è precisa e attesa: la **x0-prediction**. La rete impara a predire un segnale
+pulito quasi costante appoggiandosi al contesto e all'init lineare, ignorando il rumore in
+ingresso; così l'unica varianza residua nella catena inversa è quella dell'ultimo passo,
+`1−ᾱ_0 ≈ 6·10⁻⁴`, cioè ≈ 0. La future-mixup (che in training mescola il futuro vero nel
+condizionamento) lo aggrava. Lo abbiamo **verificato numericamente** (simulazione della
+ricorsione di varianza) e con la spia indipendente CRPS ≈ MAE. La cura è la formulazione
+DDPM standard, ε-prediction: la nostra ablazione **M4ε** la testa. Quindi non è un bug del
+sampler — la matematica DDIM è corretta — ma una proprietà della parametrizzazione.
+
 **Q35. "Perché dovrei fidarmi della calibrazione con un solo seed e split non standard?"**
 Non chiediamo fiducia assoluta: presentiamo coverage **e** width insieme, dichiariamo i
 limiti (E0, un seed) e inquadriamo i numeri come confronto interno. È trasparenza, non
@@ -221,9 +265,14 @@ qualità-probabilistica ↔ costo invece di dichiarare un vincitore.
 ---
 
 ### Suggerimenti di consegna per il Q&A
-- Se chiedono un numero M3 in Fase A: **non inventare** — "run in corso, soglia da battere
-  160.5 di CRPS".
-- Tenere pronte le slide **backup B1–B6** (calibrazione, tabella completa, perché ARIMA va
-  male, math della diffusione, Exchange, ablation DeepAR) → mappa in
-  [`SLIDE_TEMPLATE_ELECTRICITY_IT.md`](SLIDE_TEMPLATE_ELECTRICITY_IT.md).
-- Ripetere il messaggio-chiave a ogni occasione: **trade-off**, non vittoria.
+- Numeri M3 (a memoria): CRPS **241.6**, MASE **1.39** — batte DeepAR, non il naive
+  (Scenario A); sampling costoso (~4h 19min).
+- Numeri M4 (a memoria): CRPS **287.3**, MASE **1.40**, MAE **288.5** (la più bassa tra i
+  deep), cov **0.003 / 0.008**; il più veloce (fit ~48 s, predict ~41 min). Frase-gancio:
+  *"punto nitido, distribuzione collassata; CRPS ≈ MAE = massa puntiforme; colpa della
+  x0-prediction, l'ablazione ε la corregge."*
+- Tenere pronte le slide **backup B1–B7** (calibrazione, tabella completa, perché ARIMA va
+  male, math della diffusione, Exchange, ablation DeepAR, **B7 = TimeDiff & ablazione ε**) →
+  mappa in [`SLIDE_TEMPLATE_ELECTRICITY_IT.md`](SLIDE_TEMPLATE_ELECTRICITY_IT.md).
+- Ripetere il messaggio-chiave a ogni occasione: **trade-off**, non vittoria; e per M4, *il
+  design e la parametrizzazione contano quanto la taglia*.

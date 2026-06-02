@@ -44,7 +44,7 @@ DATASET = "electricity"
 
 # Models shown on the Electricity deck, in fixed order. deepar_notf is included only
 # if a row happens to exist (no ablation was run on Electricity by default).
-ORDER = ["seasonal_naive", "arima", "deepar", "deepar_notf", "timegrad", "timediff"]
+ORDER = ["seasonal_naive", "arima", "deepar", "deepar_notf", "timegrad", "timediff", "timediff_eps"]
 CODE = {
     "seasonal_naive": "M0",
     "arima": "M1",
@@ -52,6 +52,7 @@ CODE = {
     "deepar_notf": "M2-nf",
     "timegrad": "M3",
     "timediff": "M4",
+    "timediff_eps": "M4ε",
 }
 LABEL = {
     "seasonal_naive": "M0  seasonal-naive",
@@ -59,7 +60,8 @@ LABEL = {
     "deepar": "M2  DeepAR",
     "deepar_notf": "M2-nf  DeepAR (no time-feat)",
     "timegrad": "M3  TimeGrad",
-    "timediff": "M4  TimeDiff",
+    "timediff": "M4  TimeDiff (x0)",
+    "timediff_eps": "M4ε  TimeDiff (ε)",
 }
 COLOR = {
     "seasonal_naive": "#7f7f7f",
@@ -68,6 +70,7 @@ COLOR = {
     "deepar_notf": "#ffbb78",
     "timegrad": "#d62728",
     "timediff": "#9467bd",
+    "timediff_eps": "#6a3d9a",
 }
 
 # --- M3 PLACEHOLDER (interval midpoints from RESULTS_PLACEHOLDERS_ELECTRICITY.md) -----
@@ -207,8 +210,15 @@ def fig_calibration(df: pd.DataFrame, is_ph: bool) -> None:
                 mfc="none" if ph else COLOR[row["model"]],
                 color=COLOR[row["model"]], lw=1.8, ms=9,
                 label=LABEL[row["model"]] + (" (PH)" if ph else ""))
-    ax.set_xlim(0.4, 1.0)
-    ax.set_ylim(0.4, 1.0)
+    # Floor the axes dynamically: if any model's coverage collapses toward zero
+    # (e.g. M4 TimeDiff at ~0.003/0.008), zoom out so its flatline on the axis is
+    # visible — that collapse IS the story. Otherwise keep the tight 0.4 framing.
+    emp_all = np.concatenate(
+        [np.array([r["cov50"], r["cov90"]], dtype=float) for _, r in df.iterrows()]
+    )
+    floor = min(0.4, max(0.0, float(np.nanmin(emp_all)) - 0.02))
+    ax.set_xlim(floor, 1.0)
+    ax.set_ylim(floor, 1.0)
     ax.set_xticks([0.5, 0.9])
     ax.set_xlabel("copertura nominale (target)")
     ax.set_ylabel("copertura empirica (ottenuta)")
@@ -249,6 +259,17 @@ def fig_intervals(df: pd.DataFrame, is_ph: bool) -> None:
                   edgecolor="black", linewidth=0.6, alpha=0.55, label="90%")
     _mark_placeholder_bars(axw, bw1, df)
     _mark_placeholder_bars(axw, bw2, df)
+    # Label width bars that collapse toward zero (e.g. M4 TimeDiff ~2.8/6.6) so they
+    # read as "measured ≈0", not "missing", next to the giant ARIMA intervals.
+    _wmax = max(float(df["width50"].astype(float).max()),
+                float(df["width90"].astype(float).max()))
+    for _bars in (bw1, bw2):
+        for _rect in _bars:
+            _h = _rect.get_height()
+            if _wmax > 0 and 0 <= _h < 0.03 * _wmax:
+                axw.annotate(f"{_h:.1f}", (_rect.get_x() + _rect.get_width() / 2, _h),
+                             xytext=(0, 2), textcoords="offset points",
+                             ha="center", va="bottom", fontsize=7, color="#333")
     axw.set_xticks(x)
     axw.set_xticklabels(_codes(df))
     axw.set_ylabel("ampiezza media intervallo (scala orig.)")
@@ -308,8 +329,10 @@ def fig_quality_cost(df: pd.DataFrame, is_ph: bool) -> None:
     ax.set_xlabel("costo di inferenza — predict_s (s, log)")
     ax.set_ylabel("CRPS  (più basso = meglio)")
     ax.set_title("No free lunch — qualità vs costo\n(in basso a sinistra è meglio)")
+    # Only legend models actually plotted (skip ladder rungs absent from the registry,
+    # e.g. M2-nf on Electricity, or M4ε before its row is banked).
     handles = [plt.Line2D([0], [0], marker="o", ls="", color=COLOR[m],
-                          markeredgecolor="black", label=LABEL[m]) for m in ORDER]
+                          markeredgecolor="black", label=LABEL[m]) for m in df["model"]]
     ax.legend(handles=handles, fontsize=8.5, loc="upper right", framealpha=0.9)
     _ph_banner(fig, is_ph)
     fig.tight_layout(rect=(0, 0.03, 1, 1))

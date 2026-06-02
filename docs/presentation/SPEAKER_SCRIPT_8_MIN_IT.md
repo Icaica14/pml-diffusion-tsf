@@ -4,10 +4,9 @@
 > Da leggere "quasi a memoria": frasi brevi, niente formule lette a voce.
 > I numeri vengono da [`RESULTS_PLACEHOLDERS_ELECTRICITY.md`](RESULTS_PLACEHOLDERS_ELECTRICITY.md).
 >
-> 🔴 **M3 = PLACEHOLDER.** Dove vedi
-> `[PLACEHOLDER M3 — aggiornare appena disponibile results/registry.csv]`
-> il relatore C, in Fase A, dice la versione "il run è in corso"; in Fase B si
-> sostituisce col numero reale **e** si sceglie lo **scenario A/B/C** (vedi blocco C).
+> **Fase B — numeri reali.** Le righe M3 (TimeGrad, CRPS 241.6) e M4 (TimeDiff, CRPS
+> 287.3) sono reali. M4 è **foldato come backup B7**: nel parlato principale C lo cita
+> in una frase (Slide 5 e un'aside opzionale a Slide 8), il dettaglio resta per il Q&A.
 >
 > **Tempi indicativi:** A 0:00–2:45 · B 2:45–5:45 · C 5:45–9:00 (+Q&A).
 
@@ -59,15 +58,18 @@ dipende dal tipo di segnale**. E passo la parola per i modelli."
 
 ## COMPONENTE B — la scala dei modelli, TimeGrad, le metriche (~3:00)
 
-**[Slide 5 — La scala M0 → M3]**
-"Grazie. Abbiamo costruito una *scala* di quattro modelli a complessità crescente.
+**[Slide 5 — La scala M0 → M4]**
+"Grazie. Abbiamo costruito una *scala* di cinque modelli a complessità crescente.
 Alla base, **M0**, il seasonal-naive: dice semplicemente che il futuro assomiglia al
 ciclo precedente. Non si addestra, eppure — anticipo — su segnali stagionali è
 sorprendentemente forte. Poi **M1**, ARIMA: il classico lineare, con un modello
 separato per ciascuna delle 321 serie. **M2**, DeepAR: una rete ricorrente
 probabilistica, addestrata su tutte le serie insieme, che impara a condividere
-struttura. E in cima **M3**, TimeGrad, il nostro modello di **diffusione**. Salendo la
-scala cresce l'espressività — e, come vedremo, cresce il costo."
+struttura. E in cima **due** modelli di **diffusione** con design opposto: **M3**,
+TimeGrad, *autoregressivo*, genera il futuro un passo alla volta; **M4**, TimeDiff,
+*non*-autoregressivo, ripulisce l'intero blocco futuro in un colpo solo — molto più
+veloce. Salendo la scala cresce l'espressività — e, come vedremo, conta non solo la
+taglia ma il *design*: M3 e M4 ne sono la prova."
 
 **[Slide 6 — TimeGrad intuitivo]**
 "Fermiamoci un momento su TimeGrad, perché è il cuore del progetto. L'idea della
@@ -105,15 +107,18 @@ misura, scende a 253 di CRPS, ma — ed è il punto cruciale — **non** raggiun
 seasonal-naive. 253 contro 160. Quindi la domanda per il nostro modello di diffusione
 diventa chirurgica: riesce a scendere **sotto 160** di CRPS, a un costo accettabile?"
 
-> 🔴 **FASE A (M3 in corso):** "La riga di TimeGrad, qui, è ancora un segnaposto: il
-> run sta girando su GPU mentre vi parliamo, e i numeri reali li inseriamo appena
-> finisce. Quello che possiamo dire fin d'ora è *quale soglia* deve superare: 160 di
-> CRPS."
-> `[PLACEHOLDER M3 — aggiornare appena disponibile results/registry.csv]`
->
-> 🔵 **FASE B (M3 disponibile):** sostituire con il numero reale, es. "TimeGrad ottiene
-> un CRPS di ___, che [supera / non supera] la barra dei 160", e proseguire con lo
-> **scenario** scelto qui sotto.
+> **TimeGrad (M3):** "E TimeGrad? Ottiene un CRPS di **241**, che **non** supera la
+> barra dei 160: il seasonal-naive resta imbattuto. Però batte DeepAR — 241 contro
+> 253 — quindi la diffusione *qualcosa* aggiunge sul probabilistico; solo, non
+> abbastanza da scalzare il baseline, e a un costo di sampling molto più alto (~4h19)."
+
+> **TimeDiff (M4) — aside opzionale (~20s, solo se in tempo):** "Abbiamo anche un
+> secondo diffusion model, TimeDiff, non-autoregressivo. Curioso: come *previsione
+> puntuale* è il migliore dei deep — l'errore più basso — e costa una frazione,
+> quaranta minuti invece di quattro ore. Ma la sua *incertezza* è collassata: le bande
+> coprono praticamente zero, e il CRPS coincide con l'errore puntuale — la firma di una
+> distribuzione degenere. È un bell'esempio di come il design del modello cambi il
+> compromesso; per chi è curioso ho una slide di backup dedicata."
 
 **[Slide 9 — Qualità vs costo]**
 "Questo grafico riassume la nostra tesi. Sull'asse orizzontale il costo di
@@ -131,31 +136,24 @@ diffusione vince': è che esiste un compromesso fra espressività, calibrazione 
 e che su un segnale fortemente stagionale un baseline semplice è un avversario serio,
 non un fantoccio."
 
-> 🔴 **In Fase B, inserire QUI la frase dello scenario** (una sola) — testo completo in
-> `RESULTS_PLACEHOLDERS_ELECTRICITY.md` §3:
->
-> - **🅐 (M3 batte DeepAR ma non M0):** "TimeGrad migliora la baseline deep ma non
->   supera il seasonal-naive: la stagionalità è già catturata bene dal baseline, e la
->   diffusione aggiunge flessibilità ma non abbastanza valore per il suo costo. Il
->   nostro contributo è il confronto controllato, non una vittoria del modello."
-> - **🅑 (M3 batte anche M0 su CRPS/calibrazione):** "TimeGrad ottiene la migliore
->   qualità probabilistica, sfruttando struttura multivariata e incertezza non
->   gaussiana — ma il vantaggio va letto insieme al costo: sampling più lento. Una
->   vittoria *condizionata*: giustificata dove l'incertezza ha valore decisionale."
-> - **🅒 (M3 peggiora rispetto a DeepAR):** "Il risultato negativo è informativo: più
->   espressività non implica miglior forecasting. Possibili cause: training
->   insufficiente, costo del sampling, difficoltà a scalare a 321 serie, o un baseline
->   stagionale semplicemente troppo forte. Un esito scientificamente valido."
->
-> `[PLACEHOLDER M3 — aggiornare appena disponibile results/registry.csv]`
+> **Frase-scenario (Scenario A — M3 batte DeepAR ma non M0):**
+> "TimeGrad migliora la baseline deep ma non supera il seasonal-naive: la stagionalità
+> è già catturata bene dal baseline, e la diffusione aggiunge flessibilità ma non
+> abbastanza valore per il suo costo. Il nostro contributo è il confronto controllato,
+> non una vittoria del modello."
 
-"Sui limiti siamo trasparenti: lo split non è quello del benchmark pubblicato, quindi
+"E lo abbiamo visto su due fronti: TimeGrad e TimeDiff, due diffusion model con design
+opposto, danno risultati opposti — uno calibrato ma lento, l'altro velocissimo ma con
+l'incertezza rotta. La lezione è che conta il *come*, non solo la taglia.
+
+Sui limiti siamo trasparenti: lo split non è quello del benchmark pubblicato, quindi
 non ci confrontiamo con la letteratura; ARIMA per-canale è poco competitivo per
-costruzione; il sampling di diffusione è costoso; e abbiamo usato un solo seed, senza
-tuning esteso. Da qui i lavori futuri: adottare lo split standard `electricity_nips`
-per il confronto con i numeri pubblicati, provare CSDI, e ridurre i passi di
-campionamento con uno schema tipo DDIM. Vi ringraziamo, e siamo a disposizione per le
-domande."
+costruzione; il sampling di diffusione è costoso per TimeGrad; e abbiamo usato un solo
+seed, senza tuning esteso. Da qui i lavori futuri: un'ablazione su TimeDiff che predice
+il rumore invece del segnale, per ricalibrarlo; adottare lo split standard
+`electricity_nips` per il confronto con i numeri pubblicati; provare CSDI; e ridurre i
+passi di campionamento con uno schema tipo DDIM. Vi ringraziamo, e siamo a disposizione
+per le domande."
 
 ---
 
@@ -164,7 +162,8 @@ domande."
 - **A:** chiudere lo Slide 4 passando la parola con "...passo la parola per i modelli".
 - **B:** non leggere formule; sul TimeGrad insistere su *rumore→segnale* e su *sampling
   lento*. Chiudere lo Slide 7 con "...passo ai risultati".
-- **C:** in Fase A dire chiaramente "il run è in corso, numeri reali appena finisce";
-  in Fase B leggere il numero **e** una sola frase-scenario. Tenere pronte le slide di
-  **backup** (B1–B6) per il Q&A → vedi
-  [`QA_ORALE_ELECTRICITY_IT.md`](QA_ORALE_ELECTRICITY_IT.md).
+- **C:** leggere il numero reale di TimeGrad (CRPS 241) **e** la frase-scenario A
+  (batte DeepAR, non M0); citare TimeDiff (M4) in una frase a Slide 5 e — se in tempo —
+  l'aside opzionale a Slide 8 (punto nitido, incertezza collassata). Tenere pronte le
+  slide di **backup** (B1–B7, con **B7** dedicata a TimeDiff e all'ablazione ε) per il
+  Q&A → vedi [`QA_ORALE_ELECTRICITY_IT.md`](QA_ORALE_ELECTRICITY_IT.md).

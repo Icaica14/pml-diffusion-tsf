@@ -17,6 +17,7 @@ Usage (on the Colab/GPU box; ``--smoke`` runs anywhere torch imports)::
     python -m experiments.run_timediff                                         # Exchange, default budget
     python -m experiments.run_timediff --config configs/data_electricity.yaml --chunk 256  # Electricity
     python -m experiments.run_timediff --epochs 50 --samples 100 --device cuda
+    python -m experiments.run_timediff --param eps --config configs/data_electricity.yaml --chunk 256  # eps ablation -> 'timediff_eps'
     python -m experiments.run_timediff --smoke --config configs/data_electricity.yaml      # fast plumbing check
 """
 
@@ -62,6 +63,7 @@ def _build_model(ds, args, device, seed) -> TimeDiffForecaster:
         diff_steps=args.diff_steps,
         beta_schedule=args.beta_schedule,
         beta_end=args.beta_end,
+        parameterization=args.param,
         hidden=args.hidden,
         n_res_blocks=args.blocks,
         kernel=args.kernel,
@@ -91,6 +93,7 @@ def _smoke(ds, args, device, seed, season) -> None:
         target_dim=ds.D, horizon=ds.tau, context_length=ds.H,
         freq=ds.meta["freq"], start=ds.meta.get("start_date"),
         diff_steps=20, beta_schedule=args.beta_schedule,
+        parameterization=args.param,
         hidden=16, n_res_blocks=2, mixup_prob=args.mixup,
         max_epochs=2, num_batches_per_epoch=5, batch_size=16, lr=args.lr,
         n_samples=8, n_sample_steps=20, eta=args.eta, predict_batch_size=4,
@@ -124,6 +127,9 @@ def main() -> None:
     parser.add_argument("--diff-steps", type=int, default=100, help="Diffusion steps T.")
     parser.add_argument("--beta-schedule", default="cosine", help="'cosine' or 'linear'.")
     parser.add_argument("--beta-end", type=float, default=0.1, help="beta_end for the linear schedule.")
+    parser.add_argument("--param", default="x0", choices=["x0", "eps"],
+                        help="Denoiser target: 'x0' (default, the banked M4 row) or 'eps' "
+                             "(noise-prediction calibration ablation; logs as model 'timediff_eps').")
     parser.add_argument("--mixup", type=float, default=0.5,
                         help="Future-mixup keep-prob for x_ar (1.0 disables; inference uses x_ar).")
     parser.add_argument("--samples", type=int, default=100, help="Sampled trajectories per window.")
@@ -185,10 +191,11 @@ def main() -> None:
         metrics = evaluate_forecast(te_tgt, point, samples, scale, levels=(0.5, 0.9))
         n_windows = int(te_tgt.shape[0])
 
+    model_name = "timediff_eps" if args.param == "eps" else "timediff"
     row = {
         "timestamp": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "dataset": ds.name,
-        "model": "timediff",
+        "model": model_name,
         "season_length": season,
         "split": "test",
         "n_windows": n_windows,
@@ -212,7 +219,7 @@ def main() -> None:
     append_result(args.registry, row)
 
     # Console summary.
-    print(f"M4 TimeDiff  ·  {ds.name}  ·  test split")
+    print(f"M4 TimeDiff [{args.param}]  ·  {ds.name}  ·  test split  ·  model={model_name}")
     print(f"  windows={row['n_windows']}  H={ds.H}  tau={ds.tau}  D={ds.D}  "
           f"S={args.samples}  seed={seed}  device={device}")
     print(f"  model   : hidden={args.hidden} blocks={args.blocks} kernel={args.kernel}  "

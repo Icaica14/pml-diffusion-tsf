@@ -224,6 +224,12 @@ class TimeDiffForecaster:
     diff_steps : number of diffusion steps ``T``.
     beta_schedule : ``"cosine"`` (default) or ``"linear"``.
     beta_end : end value for the linear schedule (ignored by cosine).
+    parameterization : what the denoiser regresses — ``"x0"`` (default; predict the clean
+        future block, the banked M4 result) or ``"eps"`` (predict the injected noise, Ho
+        et al. 2020). The eps variant is the **calibration ablation**: regressing the noise
+        ties each sample's spread to the schedule, curing the x0 variance-collapse whose
+        signature is ``CRPS ≈ MAE`` (a degenerate point-mass predictive). The default
+        reproduces the banked x0 row exactly; ``"eps"`` is purely additive/opt-in.
     hidden, n_res_blocks, kernel, dilation_cycle : denoiser width / depth / conv shape.
     mixup_prob : per-element probability of keeping ``x_ar`` (vs revealing the true future)
         in the training future-mixup. ``1.0`` disables mixup; inference always uses
@@ -257,6 +263,7 @@ class TimeDiffForecaster:
     diff_steps: int = 100
     beta_schedule: str = "cosine"
     beta_end: float = 0.1
+    parameterization: str = "x0"
     hidden: int = 64
     n_res_blocks: int = 4
     kernel: int = 3
@@ -322,6 +329,10 @@ class TimeDiffForecaster:
         span = self.context_length + self.horizon
         if L < span:
             raise ValueError(f"train series length {L} < H+tau={span}.")
+        if self.parameterization not in ("x0", "eps"):
+            raise ValueError(
+                f"Unknown parameterization {self.parameterization!r} (use 'x0'|'eps')."
+            )
 
         self.mean_ = series.mean(axis=0)
         self.std_ = series.std(axis=0)
@@ -356,8 +367,10 @@ class TimeDiffForecaster:
                 x_ar = net.ar_init(ctx)
                 keep = (torch.rand_like(fut) < self.mixup_prob).float()
                 cond_future = keep * x_ar + (1.0 - keep) * fut
-                x0_hat = net(x_t, t, ctx, cond_future)
-                loss = torch.mean((x0_hat - fut) ** 2)
+                pred = net(x_t, t, ctx, cond_future)
+                # x0-prediction regresses the clean block; eps-prediction the noise.
+                target = noise if self.parameterization == "eps" else fut
+                loss = torch.mean((pred - target) ** 2)
                 opt.zero_grad()
                 loss.backward()
                 opt.step()
@@ -385,7 +398,7 @@ class TimeDiffForecaster:
 
     # -- sampling -------------------------------------------------------------
     def _sample_block(self, torch, net, sch, ctx, x_ar):
-        """DDIM (x0-parameterized) reverse chain for a batch of conditioning rows.
+        """DDIM reverse chain (x0- or eps-parameterized) for a batch of conditioning rows.
 
         ``ctx``/``x_ar`` are ``(M, H, D)`` / ``(M, tau, D)`` already expanded to one row
         per (window, sample). Returns ``(M, tau, D)`` standardized samples.
@@ -400,9 +413,15 @@ class TimeDiffForecaster:
             ab_t = abar[t_cur]
             ab_prev = abar[t_prev] if t_prev >= 0 else torch.tensor(1.0, device=device)
             t_b = torch.full((M,), t_cur, device=device, dtype=torch.long)
-            x0 = net(x, t_b, ctx, x_ar)
+            pred = net(x, t_b, ctx, x_ar)
+            if self.parameterization == "eps":
+                # net predicts the injected noise; recover x0 from the forward relation
+                x0 = (x - torch.sqrt(1.0 - ab_t) * pred) / torch.sqrt(ab_t)
+            else:
+                x0 = pred
             if self.clip_x0 is not None:
                 x0 = torch.clamp(x0, -self.clip_x0, self.clip_x0)
+            # eps re-derived from the (clamped) x0 so the DDIM pair stays consistent
             eps = (x - torch.sqrt(ab_t) * x0) / torch.sqrt(1.0 - ab_t)
             sigma = self.eta * torch.sqrt((1.0 - ab_prev) / (1.0 - ab_t)) * torch.sqrt(1.0 - ab_t / ab_prev)
             coef = torch.clamp(1.0 - ab_prev - sigma ** 2, min=0.0)

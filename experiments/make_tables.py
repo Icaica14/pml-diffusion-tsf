@@ -1,4 +1,4 @@
-"""Assemble the M0–M3 head-to-head comparison tables from the results registry (E1).
+"""Assemble the model-ladder head-to-head comparison tables from the results registry (E1).
 
 Counterpart to ``plot_results.py`` / ``plot_presentation.py`` (which draw the *figures*):
 this script turns ``results/registry.csv`` into the **comparison tables** the deck and
@@ -43,7 +43,7 @@ OUTDIR = REPO_ROOT / "results" / "tables"
 
 # Fixed model order + stable code/name per model — identical to the plot scripts so a
 # reader learns the ladder once (M0→M4) and reads every table and figure the same way.
-ORDER = ["seasonal_naive", "arima", "deepar", "deepar_notf", "timegrad", "timediff"]
+ORDER = ["seasonal_naive", "arima", "deepar", "deepar_notf", "timegrad", "timediff", "timediff_eps"]
 CODE = {
     "seasonal_naive": "M0",
     "arima": "M1",
@@ -51,6 +51,7 @@ CODE = {
     "deepar_notf": "M2-nf",
     "timegrad": "M3",
     "timediff": "M4",
+    "timediff_eps": "M4ε",
 }
 NAME = {
     "seasonal_naive": "seasonal-naive",
@@ -59,6 +60,7 @@ NAME = {
     "deepar_notf": "DeepAR (no-tf)",
     "timegrad": "TimeGrad",
     "timediff": "TimeDiff",
+    "timediff_eps": "TimeDiff (ε)",
 }
 
 # --- M3 PLACEHOLDER (interval midpoints from RESULTS_PLACEHOLDERS_ELECTRICITY.md) -----
@@ -259,8 +261,16 @@ def _markdown(df: pd.DataFrame, dataset: str, is_ph: bool) -> str:
     bar = float(naive.iloc[0]) if len(naive) else float("nan")
     bar_txt = _fmt_value(bar, abs(bar)) if np.isfinite(bar) else "—"
 
+    # Title span tracks the model codes actually present (M0–M4 today, grows later).
+    _nums = []
+    for _m in df["model"]:
+        _digits = "".join(c for c in CODE.get(_m, "").split("-")[0] if c.isdigit())
+        if _digits:
+            _nums.append(int(_digits))
+    _span = f"M{min(_nums)}–M{max(_nums)}" if _nums else "M0"
+
     parts = [
-        f"# Comparativa M0–M3 — {dataset.capitalize()}",
+        f"# Comparativa {_span} — {dataset.capitalize()}",
         "",
         "> Generato da `experiments/make_tables.py` da `results/registry.csv`. "
         "**Non modificare a mano** — rigenera il file.",
