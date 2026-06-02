@@ -42,14 +42,15 @@ REGISTRY = REPO_ROOT / "results" / "registry.csv"
 OUTDIR = REPO_ROOT / "results" / "tables"
 
 # Fixed model order + stable code/name per model — identical to the plot scripts so a
-# reader learns the ladder once (M0→M3) and reads every table and figure the same way.
-ORDER = ["seasonal_naive", "arima", "deepar", "deepar_notf", "timegrad"]
+# reader learns the ladder once (M0→M4) and reads every table and figure the same way.
+ORDER = ["seasonal_naive", "arima", "deepar", "deepar_notf", "timegrad", "timediff"]
 CODE = {
     "seasonal_naive": "M0",
     "arima": "M1",
     "deepar": "M2",
     "deepar_notf": "M2-nf",
     "timegrad": "M3",
+    "timediff": "M4",
 }
 NAME = {
     "seasonal_naive": "seasonal-naive",
@@ -57,6 +58,7 @@ NAME = {
     "deepar": "DeepAR",
     "deepar_notf": "DeepAR (no-tf)",
     "timegrad": "TimeGrad",
+    "timediff": "TimeDiff",
 }
 
 # --- M3 PLACEHOLDER (interval midpoints from RESULTS_PLACEHOLDERS_ELECTRICITY.md) -----

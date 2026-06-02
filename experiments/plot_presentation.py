@@ -44,13 +44,14 @@ DATASET = "electricity"
 
 # Models shown on the Electricity deck, in fixed order. deepar_notf is included only
 # if a row happens to exist (no ablation was run on Electricity by default).
-ORDER = ["seasonal_naive", "arima", "deepar", "deepar_notf", "timegrad"]
+ORDER = ["seasonal_naive", "arima", "deepar", "deepar_notf", "timegrad", "timediff"]
 CODE = {
     "seasonal_naive": "M0",
     "arima": "M1",
     "deepar": "M2",
     "deepar_notf": "M2-nf",
     "timegrad": "M3",
+    "timediff": "M4",
 }
 LABEL = {
     "seasonal_naive": "M0  seasonal-naive",
@@ -58,6 +59,7 @@ LABEL = {
     "deepar": "M2  DeepAR",
     "deepar_notf": "M2-nf  DeepAR (no time-feat)",
     "timegrad": "M3  TimeGrad",
+    "timediff": "M4  TimeDiff",
 }
 COLOR = {
     "seasonal_naive": "#7f7f7f",
@@ -65,6 +67,7 @@ COLOR = {
     "deepar": "#ff7f0e",
     "deepar_notf": "#ffbb78",
     "timegrad": "#d62728",
+    "timediff": "#9467bd",
 }
 
 # --- M3 PLACEHOLDER (interval midpoints from RESULTS_PLACEHOLDERS_ELECTRICITY.md) -----
