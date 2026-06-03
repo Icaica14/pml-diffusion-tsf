@@ -179,6 +179,15 @@ governata esplicitamente da `ε_hat`, non residuale: è il motivo per cui DDPM s
 (Ho 2020) calibra. Tesi verificabile: M4ε deve **alzare cov50/cov90 verso il nominale** e
 **avvicinare CRPS e MAE solo quanto basta** (non farli coincidere).
 
+> **Esito reale (ablazione fatta, vedi §1.1).** ε **non** calibra — *ribalta*: cov
+> **0.998/1.000**, width50 **7686**, width90 **11359** (le bande più larghe della scala),
+> MASE **4.02**, CRPS **1376**. Su un blocco *non-autoregressivo* la varianza iniettata da ε
+> si sparge su tutte le τ×D celle senza ricomporsi → sovra-dispersione *uniforme*
+> (RMSE/MAE ≈ 8.97 ≈ x0 8.85). Lettura definitiva: **nessuna** parametrizzazione naïve (x0
+> *o* ε) calibra il blocco non-AR; **x0 è il male minore** (la scelta del paper TimeDiff), e
+> la calibrazione vera richiede di più (varianza appresa σ_θ, o conformal). Il meglio
+> calibrato dell'intera scala resta **DeepAR**, non una diffusione.
+
 > Questo è il pezzo "didattico" forte del progetto: non *"il diffusion ha vinto/perso"*,
 > ma *"la parametrizzazione del target cambia radicalmente la calibrazione, a parità di
 > tutto il resto"* — un risultato controllato e istruttivo.

@@ -4,7 +4,7 @@
 
 > **Copione di parlato continuo.** Tre blocchi — A (Giovanni Mason) · B (Lorenzo Di Bernardo) · C (Lorenzo Karol Gobbo), ~2.5–3 min ciascuno.
 > Da leggere "quasi a memoria": frasi brevi, niente formule lette a voce.
-> I numeri vengono da [`RESULTS_PLACEHOLDERS_ELECTRICITY.md`](RESULTS_PLACEHOLDERS_ELECTRICITY.md).
+> I numeri vengono dalle tabelle finali ([`tables/comparison_electricity.md`](tables/comparison_electricity.md)).
 >
 > **Fase B — numeri reali.** Le righe M3 (TimeGrad, CRPS 241.6) e M4 (TimeDiff, CRPS
 > 287.3) sono reali. M4 è **foldato come backup B7**: nel parlato principale C lo cita

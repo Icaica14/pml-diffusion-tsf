@@ -1,13 +1,13 @@
 # Q&A orale — Electricity (PML, Prof. Bortolussi)
 
 > **Domande probabili all'orale + risposte pronte.** Italiano, poche formule, tono
-> onesto e non trionfalista. I numeri vengono da
-> [`RESULTS_PLACEHOLDERS_ELECTRICITY.md`](RESULTS_PLACEHOLDERS_ELECTRICITY.md).
+> onesto e non trionfalista. I numeri vengono dalle tabelle finali
+> ([`tables/comparison_electricity.md`](tables/comparison_electricity.md)).
 >
 > **Fase B:** M3 (TimeGrad, CRPS 241.6) e M4 (TimeDiff, CRPS 287.3) sono numeri reali —
 > niente più "run in corso". M4 ha un *doppio volto* (punto nitido, distribuzione
-> collassata): vedi Q8, Q16-bis, Q34-bis. Analisi numerica in
-> [`RESULTS_PLACEHOLDERS_ELECTRICITY.md`](RESULTS_PLACEHOLDERS_ELECTRICITY.md) §5.
+> collassata): vedi Q8, Q16-bis, Q34-bis. Dettaglio numerico nelle tabelle finali
+> ([`tables/comparison_electricity.md`](tables/comparison_electricity.md)).
 >
 > Categorie: **(I)** probabilistico & metodo · **(II)** modelli & diffusione ·
 > **(III)** risultati & interpretazione · **(IV)** metriche & valutazione ·
