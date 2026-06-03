@@ -27,6 +27,8 @@ figures/**/*.gif
 *.pdf
 notes/
 books/
+# ...but OUR OWN built presentation PDFs are tracked deliverables (not course notes):
+!docs/presentation/*.pdf
 
 # --- OS / editors ---
 .DS_Store
