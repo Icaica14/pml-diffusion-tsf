@@ -149,9 +149,12 @@ l'incertezza rotta. La lezione è che conta il *come*, non solo la taglia.
 Sui limiti siamo trasparenti: lo split non è quello del benchmark pubblicato, quindi
 non ci confrontiamo con la letteratura; ARIMA per-canale è poco competitivo per
 costruzione; il sampling di diffusione è costoso per TimeGrad; e abbiamo usato un solo
-seed, senza tuning esteso. Da qui i lavori futuri: un'ablazione su TimeDiff che predice
-il rumore invece del segnale, per ricalibrarlo; adottare lo split standard
-`electricity_nips` per il confronto con i numeri pubblicati; provare CSDI; e ridurre i
+seed, senza tuning esteso. L'ablazione che avevamo in programma su TimeDiff — predire il
+rumore invece del segnale — l'abbiamo fatta, e il risultato è istruttivo: predire ε **non**
+lo ricalibra, lo ribalta nell'estremo opposto, da incertezza azzerata a incertezza gonfiata.
+Restano quindi i lavori futuri veri: calibrare TimeDiff oltre lo switch x0/ε (varianza
+appresa o conformal); adottare lo split standard `electricity_nips` per il confronto con i
+numeri pubblicati; provare CSDI; e ridurre i
 passi di campionamento con uno schema tipo DDIM. Vi ringraziamo, e siamo a disposizione
 per le domande."
 

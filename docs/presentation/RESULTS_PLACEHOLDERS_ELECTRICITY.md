@@ -46,10 +46,16 @@ che denoisa l'intero blocco futuro (τ×D) in una sola catena inversa. Due fatti
 > basso, ma la sua incertezza è rotta: gli intervalli collassano a zero. È l'esempio da
 > manuale di overconfidence — e la ragione per cui la parametrizzazione conta."*
 
-**Ablazione pianificata (M4ε, eps-prediction):** rieseguiamo TimeDiff predicendo il
-**rumore** ε invece del segnale pulito x0 (DDPM standard, Ho 2020). Tesi: predire ε
-controlla esplicitamente la varianza iniettata e dovrebbe **ricalibrare** gli intervalli.
-Il report racconta l'arco *"x0 collassa → ecco perché (varianza) → ε lo calibra"*.
+**Ablazione M4ε (eps-prediction) — fatta:** abbiamo rieseguito TimeDiff predicendo il
+**rumore** ε invece del segnale pulito x0 (DDPM standard, Ho 2020). Tesi iniziale: ε
+controlla esplicitamente la varianza iniettata e dovrebbe **ricalibrare**. **Esito reale:
+ε non ricalibra, ribalta.** TimeDiff passa dalla sotto-dispersione (cov 0.003/0.008) alla
+**sovra-dispersione** estrema: cov **0.998/1.000**, width50 **7686**, width90 **11359** (le
+bande più larghe della scala), e il punto degrada — MASE **4.02** (vs 1.40), CRPS **1376**
+(vs 287), MAE **1045** (vs 288). Spia di consistenza: RMSE/MAE resta uniforme (ε 8.97 ≈ x0
+8.85 ≈ naive 8.67) → sovra-dispersione *uniforme*, non finestre esplose: effetto reale, non
+bug. Arco rivisto: *"x0 collassa → varianza residua → ε ribalta nell'eccesso opposto: la
+calibrazione non è uno switch di parametrizzazione."*
 
 ### Tempi di inferenza in secondi (per lo scatter qualità/costo)
 

@@ -222,7 +222,7 @@ def fig_calibration(df: pd.DataFrame, is_ph: bool) -> None:
     ax.set_xticks([0.5, 0.9])
     ax.set_xlabel("copertura nominale (target)")
     ax.set_ylabel("copertura empirica (ottenuta)")
-    ax.set_title("Calibrazione — sotto la diagonale = troppo sicuro")
+    ax.set_title("Calibrazione — sotto la diagonale = troppo sicuro · sopra = troppo incerto")
     ax.legend(loc="lower right", fontsize=8.5, framealpha=0.9)
     ax.set_aspect("equal", adjustable="box")
     _ph_banner(fig, is_ph)

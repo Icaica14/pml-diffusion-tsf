@@ -78,9 +78,9 @@
   economica dei deep) ma il più in alto — il non-AR compra velocità, non qualità.
 - **Stato:** ✅ generata con M3/M4 reali.
 
-### 4. `fig_cmp_calibration.png` — calibrazione (backup B1, B7) ⭐ M4
+### 4. `fig_cmp_calibration.png` — calibrazione (backup B1, B7) ⭐ M4 vs M4ε
 - **Cosa mostra:** reliability plot — per ogni modello cov50 e cov90 vs i nominali 0.50 e
-  0.90; sotto la diagonale = troppo sicuro. **Il pavimento degli assi è dinamico:** se un
+  0.90; sotto la diagonale = troppo sicuro, sopra = troppo incerto. **Il pavimento degli assi è dinamico:** se un
   modello collassa verso zero (M4), si allarga a 0 per renderlo visibile, altrimenti resta
   al framing stretto 0.4 (Exchange).
 - **Perché:** risponde a "come fai a dire che è calibrato?"; è la figura-chiave di B7.
@@ -89,7 +89,10 @@
   troppo strette).
 - **M4:** cov50 **0.003**, cov90 **0.008** — la linea viola è **schiacciata sull'asse**:
   l'esempio da manuale di overconfidence (distribuzione collassata).
-- **Stato:** ✅ generata con M3/M4 reali.
+- **M4ε:** cov50 **0.998**, cov90 **1.000** — la seconda linea viola è **inchiodata al
+  soffitto**: l'ablazione ε ribalta M4 nell'estremo opposto (sovra-dispersione). Le due
+  viola agli estremi opposti del grafico *sono* la storia di B7.
+- **Stato:** ✅ generata con M3/M4/M4ε reali.
 
 ### 5. `fig_cmp_intervals.png` — copertura + ampiezza bande / sharpness (backup B1, B7)
 - **Cosa mostra:** due pannelli — copertura (cov50/cov90 vs nominale) e sharpness
@@ -102,7 +105,10 @@
   fig. 4 è coerente).
 - **M4:** width50 **≈ 2.8**, width90 **≈ 6.6** — bande **quasi nulle**: copertura ≈ 0 e
   ampiezza ≈ 0 insieme = intervalli collassati (non bande larghe mal piazzate).
-- **Stato:** ✅ generata con M3/M4 reali.
+- **M4ε:** width50 **≈ 7686**, width90 **≈ 11359** — **le bande più larghe della scala**
+  (più larghe persino di ARIMA): copertura ≈ 1 e ampiezza enorme insieme = sovra-dispersione,
+  lo specchio esatto di M4.
+- **Stato:** ✅ generata con M3/M4/M4ε reali.
 
 ### 6. `fig_cmp_cost.png` — costi fit/predict (supplemento S9)
 - **Cosa mostra:** barre dei tempi `fit_s` e `predict_s` per modello (scala log).

@@ -5,7 +5,8 @@
 > [`RESULTS_PLACEHOLDERS_ELECTRICITY.md`](RESULTS_PLACEHOLDERS_ELECTRICITY.md)
 > (fonte di verità). M0–M4 sono **numeri reali** (da `results/registry.csv`).
 > M4 TimeDiff entra nel deck *foldato* nelle slide 5/8/9/10 + backup **B7**
-> (deep-dive collasso x0 → ablazione ε); promuovibile a slide piena quando arriva M4ε.
+> (deep-dive: collasso x0 ↔ esplosione ε, i due estremi della parametrizzazione).
+> M4ε è bancato: B7 è ora una **slide-storia completa** (numeri reali, non più foreshadow).
 >
 > **Legenda "chi parla":** A = problema/dataset/PML · B = modelli/metodo ·
 > C = risultati/interpretazione/limiti. (~2.5–3 min a testa.)
@@ -235,8 +236,8 @@
     puntiforme. Lo approfondiamo in backup (B7) con l'ablazione ε."*
   - Sotto-messaggio onesto: su Electricity **il baseline stagionale è fortissimo**;
     ARIMA per-canale è fragile su 321 serie.
-- **Figura:** `fig_cmp_crps.png` (barre CRPS, M3/M4 reali) +
-  `fig_cmp_mase.png` come backup.
+- **Figura:** `fig_cmp_crps.png` (barre CRPS, M3/M4 reali; la barra **M4ε** è l'ablazione
+  ε — la più alta = la peggiore, dettaglio in B7) + `fig_cmp_mase.png` come backup.
 - **Speaker notes (C, ~70s):** "Ecco i numeri su Electricity. La prima cosa che salta
   all'occhio: il seasonal-naive ha CRPS 160 e MASE uno — è la *barra da battere*.
   ARIMA, montato un modello per canale su 321 serie, è fragile e va malissimo. DeepAR
@@ -268,7 +269,8 @@
   - Frase chiave: *"Non basta vincere sul CRPS: bisogna vincere abbastanza da
     giustificare il costo di sampling — e la velocità da sola non vale se l'incertezza
     è rotta."*
-- **Figura:** `fig_cmp_quality_cost.png` (scatter; M3 e M4 punti reali).
+- **Figura:** `fig_cmp_quality_cost.png` (scatter; M3 e M4 punti reali; **M4ε** in alto a
+  sinistra = il più economico ma il peggiore: la prova plastica che "cheap ≠ good").
 - **Speaker notes (C, ~70s):** "Questo è il grafico che riassume la nostra tesi.
   Sull'asse orizzontale il costo di campionamento, sul verticale la qualità
   probabilistica: l'ideale è l'angolo in basso a sinistra, economico e accurato. Il
@@ -301,13 +303,15 @@
   - **Esito M4 — il design conta:** *"TimeDiff, non-autoregressivo, è ~6× più rapido in
     sampling di TimeGrad e dà la MAE più bassa tra i deep, ma in x0-prediction la sua
     distribuzione collassa (cov ≈ 0, CRPS ≈ MAE). Non è un bug del sampler: è la
-    parametrizzazione del target. L'ablazione ε (M4ε) testa se predire il rumore
-    ricalibra."* Lezione: **la scelta x0 vs ε cambia la calibrazione a parità di tutto.**
+    parametrizzazione del target. L'ablazione ε (M4ε) lo conferma per assurdo: predire il
+    rumore **non** ricalibra, ribalta nell'estremo opposto (cov ≈ 1, bande enormi, MASE 4.0)."*
+    Lezione: **x0 ed ε sono i due estremi (sotto/sovra-confidente); la calibrazione vera
+    non è uno switch di parametrizzazione.**
   - **Limiti:** split non-benchmark (E0); ARIMA per-canale poco competitivo; sampling
     di diffusione costoso (M3); un solo seed; niente tuning esteso degli iperparametri.
-  - **Lavori futuri:** ablazione **ε-prediction** (M4ε, in corso) per ricalibrare
-    TimeDiff; split `electricity_nips` per confronto con la letteratura; CSDI;
-    riduzione passi di sampling (DDIM-like); più seed.
+  - **Lavori futuri:** calibrare davvero TimeDiff oltre lo switch x0/ε (varianza appresa
+    σ_θ, o calibrazione post-hoc tipo conformal); split `electricity_nips` per confronto
+    con la letteratura; CSDI; riduzione passi di sampling (DDIM-like); più seed.
 - **Figura:** richiamo a `fig_cmp_quality_cost.png` (la stessa) o nessuna.
 - **Speaker notes (C, ~55s):** "In sintesi: il nostro messaggio non è che la
   diffusione vince, ma che esiste un compromesso tra espressività, calibrazione e
@@ -317,7 +321,8 @@
   diffusion model con design opposto: TimeDiff, non-autoregressivo, ribalta il costo —
   sei volte più rapido — ma in questa parametrizzazione rompe la calibrazione. È la
   prova che a contare è il *design*, non solo la taglia; e la nostra ablazione sul modo
-  di predire — il segnale pulito contro il rumore — serve proprio a ricalibrarlo. Siamo
+  di predire — segnale pulito contro rumore — mostra che nessuno dei due estremi è
+  calibrato: x0 azzera l'incertezza, ε la gonfia. Siamo
   onesti sui limiti: split non-benchmark, ARIMA poco competitivo, sampling costoso, un
   solo seed. Lavori futuri: l'ablazione ε, lo split standard, CSDI. Grazie."
 - **Chi parla:** C
@@ -347,18 +352,23 @@
 - **B6 — DeepAR senza time-features (M2 ablation):** se presente in registry
   (`deepar_notf`), mostra l'effetto delle covariate calendario. *Uso:* domanda su
   ablation. 🟡 solo se la riga esiste.
-- **B7 — M4 TimeDiff: il collasso di varianza e l'ablazione ε:** la slide-storia del
-  doppio volto di TimeDiff. *Contenuto:* (1) cos'è il non-AR (denoisa l'intero blocco
-  τ×D in una catena, da cui la velocità); (2) il collasso — cov 0.003/0.008, width ≈ 0,
-  **CRPS ≈ MAE** = massa puntiforme; (3) **perché**: in x0-prediction la rete predice
-  un x0 quasi costante appoggiandosi al contesto/`x_ar` e ignora il rumore `x_t`;
-  l'unica varianza residua è `1−ᾱ_0 ≈ 6·10⁻⁴` → std ≈ 0 (la *future-mixup* aggrava);
-  (4) **la cura**: ε-prediction (DDPM, Ho 2020) controlla esplicitamente la dispersione
-  iniettata → M4ε dovrebbe ricalibrare. *Figure:* `fig_cmp_calibration.png` (M4 piatto
-  sull'asse) + `fig_cmp_intervals.png` (width 2.8/6.6). *Uso:* "perché TimeDiff ha
-  coverage zero?" / "qual è la differenza tra i due diffusion model?".
-  ✅ x0 reale; 🟡 riga M4ε in arrivo (numeri al posto del foreshadow). Dettaglio
-  numerico in `RESULTS_PLACEHOLDERS_ELECTRICITY.md` §5.
+- **B7 — M4 TimeDiff: i due volti della parametrizzazione (x0 vs ε)** ⭐ slide-storia:
+  *Contenuto:* (1) cos'è il non-AR (denoisa l'intero blocco τ×D in una catena, da cui la
+  velocità); (2) **x0 collassa** — cov 0.003/0.008, width ≈ 0, **CRPS ≈ MAE** = massa
+  puntiforme; **perché**: in x0-prediction la rete predice un x0 quasi costante
+  appoggiandosi al contesto/`x_ar` e ignora il rumore `x_t`; l'unica varianza residua è
+  `1−ᾱ_0 ≈ 6·10⁻⁴` → std ≈ 0 (la *future-mixup* aggrava); (3) **la presunta cura, ε,
+  ribalta**: ε-prediction (DDPM, Ho 2020) lega la dispersione allo schedule → ci
+  aspettavamo la ricalibrazione, invece M4ε **sovra-disperde** (cov50 **0.998**, cov90
+  **1.000**, width50 **7 686**, width90 **11 359** — le bande più larghe della scala — e
+  MASE **4.02**); (4) **la lezione**: x0 ed ε sono i due estremi (sotto/sovra-confidente),
+  x0 è il male minore (la scelta del paper TimeDiff), e la calibrazione vera richiede di
+  più (σ_θ appresa, o conformal). Bonus: il meglio calibrato della scala è **DeepAR**, non
+  una diffusione. *Figure:* `fig_cmp_calibration.png` (i due viola agli estremi: M4 sul
+  pavimento, M4ε sul soffitto) + `fig_cmp_intervals.png` (width 2.8/6.6 vs 7 686/11 359).
+  *Uso:* "perché TimeDiff ha coverage zero?" / "l'ablazione ε ha funzionato?" / "qual è la
+  differenza tra i due diffusion model?". ✅ M4 x0 **e** M4ε reali. Dettaglio numerico in
+  `RESULTS_PLACEHOLDERS_ELECTRICITY.md` §5.
 
 ---
 
@@ -377,7 +387,7 @@
 | 9 | `fig_cmp_quality_cost.png` | ✅ M3/M4 reali |
 | 10 | richiamo S9 | ✅ |
 | B1 | `fig_cmp_calibration.png`, `fig_cmp_intervals.png` | ✅ M3/M4 reali |
-| B7 | `fig_cmp_calibration.png`, `fig_cmp_intervals.png` | ✅ M4 x0 · 🟡 M4ε |
+| B7 | `fig_cmp_calibration.png`, `fig_cmp_intervals.png` | ✅ M4 x0 **e** M4ε reali |
 
 > Dettaglio completo delle figure in
 > [`FIGURE_PLAN_ELECTRICITY_IT.md`](FIGURE_PLAN_ELECTRICITY_IT.md).

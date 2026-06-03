@@ -69,8 +69,10 @@ TimeDiff invece predice il **segnale pulito** (x0-prediction), ed è proprio que
 che fa collassare la sua incertezza (vedi Q16-bis e Q34-bis). Predire ε controlla
 *esplicitamente* la dispersione iniettata a ogni passo; predire x0 la lascia residuale, e
 se la rete impara a predire un x0 quasi costante quella dispersione svanisce. La nostra
-ablazione **M4ε** verifica proprio questo: stesso modello, target ε invece di x0 → la
-calibrazione dovrebbe tornare.
+ablazione **M4ε** lo verifica — ma con un esito **inatteso**: predire ε **non** ricalibra
+TimeDiff, lo **ribalta** nell'estremo opposto (cov 0.998/1.000, bande ~7700/11360, MASE 4.02).
+Nessuna delle due parametrizzazioni naive (x0 *o* ε) è calibrata sul blocco non-autoregressivo;
+il paper TimeDiff sceglie x0 come male minore. Dettaglio completo in Q34-ter.
 
 **Q9. Come si condiziona TimeGrad sul passato?**
 Una RNN comprime la finestra di contesto H in uno stato; quello stato entra come
@@ -91,7 +93,7 @@ sequenza, ~4h19). **TimeDiff è non-autoregressivo**: denoisa l'**intero blocco 
 (τ×D) in *una sola* catena inversa, con un backbone convoluzionale e un'inizializzazione
 lineare del futuro (`x_ar`). Risultato: sampling molto più rapido (~41 min). Inoltre
 TimeGrad usa ε-prediction, TimeDiff x0-prediction — differenza che spiega la calibrazione
-opposta (vedi Q8, Q16-bis).
+opposta (vedi Q8, Q34-bis, Q34-ter).
 
 **Q11. Perché ARIMA è "un modello per canale"?**
 ARIMA è univariato: con 321 serie alleniamo 321 modelli auto-ARIMA indipendenti. Questo
@@ -249,8 +251,23 @@ ingresso; così l'unica varianza residua nella catena inversa è quella dell'ult
 `1−ᾱ_0 ≈ 6·10⁻⁴`, cioè ≈ 0. La future-mixup (che in training mescola il futuro vero nel
 condizionamento) lo aggrava. Lo abbiamo **verificato numericamente** (simulazione della
 ricorsione di varianza) e con la spia indipendente CRPS ≈ MAE. La cura è la formulazione
-DDPM standard, ε-prediction: la nostra ablazione **M4ε** la testa. Quindi non è un bug del
-sampler — la matematica DDIM è corretta — ma una proprietà della parametrizzazione.
+DDPM standard, ε-prediction: la nostra ablazione **M4ε** la testa — e il verdetto è in
+Q34-ter (ε **non** cura, ribalta). Quindi non è un bug del sampler — la matematica DDIM è
+corretta — ma una proprietà della parametrizzazione.
+
+**Q34-ter. "E l'ablazione ε ha funzionato? Ha ricalibrato TimeDiff?"**
+No — ed è il risultato più interessante. Predire ε **non** ricalibra: **ribalta** TimeDiff
+dall'estremo della sotto-dispersione (cov 0.003/0.008, bande ≈ 0) a quello opposto della
+**sovra-dispersione** (cov **0.998/1.000**, width50 ≈ 7686, width90 ≈ 11359 — le bande più
+larghe di tutta la scala), e degrada anche il punto (MASE **4.02** vs 1.40, MAE 1045 vs 288,
+CRPS 1376 vs 287). Non è un bug: il rapporto RMSE/MAE resta uniforme (ε 8.97 ≈ x0 8.85 ≈
+naive 8.67), quindi è sovra-dispersione *uniforme*, non qualche finestra esplosa; le formule
+sono i DDPM da manuale. Il meccanismo: senza ancoraggio autoregressivo, il blocco non-AR
+sparge la varianza iniettata da ε su tutte le τ×D celle senza ricomporla → varianza fuori
+controllo. Lettura onesta: **nessuna parametrizzazione naive calibra** un blocco non-AR; x0
+è il **male minore** (la scelta del paper TimeDiff); calibrare davvero richiede di più
+(varianza appresa σ_θ, o conformal). E il meglio calibrato dell'intera scala **non** è una
+diffusione: è **DeepAR** (cov 0.466/0.831).
 
 **Q35. "Perché dovrei fidarmi della calibrazione con un solo seed e split non standard?"**
 Non chiediamo fiducia assoluta: presentiamo coverage **e** width insieme, dichiariamo i
@@ -270,7 +287,8 @@ qualità-probabilistica ↔ costo invece di dichiarare un vincitore.
 - Numeri M4 (a memoria): CRPS **287.3**, MASE **1.40**, MAE **288.5** (la più bassa tra i
   deep), cov **0.003 / 0.008**; il più veloce (fit ~48 s, predict ~41 min). Frase-gancio:
   *"punto nitido, distribuzione collassata; CRPS ≈ MAE = massa puntiforme; colpa della
-  x0-prediction, l'ablazione ε la corregge."*
+  x0-prediction — e l'ablazione ε non la corregge: la ribalta (cov ≈ 1). x0 ed ε = i due
+  estremi opposti, nessuno calibrato."*
 - Tenere pronte le slide **backup B1–B7** (calibrazione, tabella completa, perché ARIMA va
   male, math della diffusione, Exchange, ablation DeepAR, **B7 = TimeDiff & ablazione ε**) →
   mappa in [`SLIDE_TEMPLATE_ELECTRICITY_IT.md`](SLIDE_TEMPLATE_ELECTRICITY_IT.md).
