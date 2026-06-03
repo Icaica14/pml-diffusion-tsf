@@ -1,0 +1,60 @@
+# =============================================================================
+# Electricity (electricity_nips) — the E0 REPRODUCE-GATE config (plan §4.3)
+# =============================================================================
+# Same dataset *family* as configs/data_electricity.yaml, but the PUBLISHED
+# benchmark instead of the raw LSTNet file:
+#
+#                      LSTNet (our headline)        electricity_nips (E0)
+#   series             321                          370
+#   split              our ratios [0.7/0.1/0.2]     official train/test boundary
+#   test protocol      sliding stride-1 windows     7-window rolling, stride = tau
+#   source            laiguokun .txt.gz            GluonTS get_dataset(...)
+#
+# WHY: the TimeGrad / CSDI / ScoreGrad CRPS-sum numbers are all reported on
+# electricity_nips. Running M3 here, with H/tau IDENTICAL to the LSTNet config,
+# isolates the *split* as the single variable behind any gap to the paper table.
+#
+# Everything downstream is unchanged: src/data/loader.py sees source.loader and
+# delegates to src/data/electricity_nips.py, which returns the same ForecastDataset
+# contract. gluonts is needed ONLY to build this config (heavy/Colab env; FASE B).
+#
+# Smoke (Colab, after `pip install` of the heavy group):
+#   python -m src.data.electricity_nips configs/data_electricity_nips.yaml
+# Run M3 + the published metric:
+#   python -m experiments.run_timegrad --config configs/data_electricity_nips.yaml \
+#       --chunk 1 --crps-sum
+# =============================================================================
+
+name: electricity_nips
+kind: data
+
+source:
+  # Build via GluonTS's dataset repository rather than the LSTNet CSV path.
+  loader: "gluonts_electricity_nips"
+  gluonts_name: "electricity_nips"
+  # First Colab build downloads + caches under ~/.gluonts; set true to force a rebuild.
+  regenerate: false
+  freq: "h"                 # nominal; the real freq is read from GluonTS metadata
+  # num_test_windows: 7     # optional pin; default = len(test)//len(train) (=7 here)
+
+split:
+  # The official split is fixed by the benchmark, NOT by ratios. Kept for schema
+  # parity only; electricity_nips.py ignores it (split_ratios -> null in meta).
+  ratios: [0.7, 0.1, 0.2]
+
+window:
+  # IDENTICAL to data_electricity.yaml so M3's E0 number is comparable cell-for-cell
+  # to our LSTNet M3 — only the data/split differ.
+  context_length: 168       # H  — one week of hourly history
+  horizon: 24               # tau — electricity_nips prediction_length
+  stride: 24                # rolling step; the loader FORCES stride = tau regardless
+
+scaling:
+  method: "standardize"     # per-channel z-score; FIT ON TRAIN ONLY
+
+eval:
+  # Daily seasonal naive for the MASE denominator — same as the LSTNet config so MASE
+  # is comparable across the two splits.
+  season_length: 24
+
+seed: 42

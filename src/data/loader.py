@@ -94,7 +94,23 @@ def build_dataset(config: dict[str, Any]) -> ForecastDataset:
     -> fit scaler on TRAIN ONLY -> transform every split. Returns the single object
     every model consumes (plan §4.5). Works for any LSTNet-style gzipped CSV; the
     dataset identity comes entirely from ``config``.
+
+    Dispatch: a config may opt out of the LSTNet-CSV path with ``source.loader``. The
+    only alternative today is ``gluonts_electricity_nips`` (the E0 reproduce-gate, which
+    builds the *published* split via GluonTS). The import is lazy so the light/local env
+    needs no gluonts unless that config is actually built.
     """
+    loader_kind = config.get("source", {}).get("loader")
+    if loader_kind == "gluonts_electricity_nips":
+        from .electricity_nips import build_electricity_nips
+
+        return build_electricity_nips(config)
+    if loader_kind not in (None, "lstnet_csv"):
+        raise ValueError(
+            f"Unknown source.loader {loader_kind!r}; expected 'lstnet_csv' (default) "
+            f"or 'gluonts_electricity_nips'."
+        )
+
     src = config["source"]
     raw_path = download(src["url"], src["raw_dir"], src["filename"])
     df = load_gz_csv(raw_path)

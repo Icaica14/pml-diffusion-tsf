@@ -14,9 +14,14 @@ This loader uses the raw LSTNet `electricity.txt.gz` (light, downloadable like
 Exchange) for fast local iteration and EDA. The published TimeGrad/CSDI **CRPS-sum**
 numbers we must reproduce in E0 are reported on the GluonTS `electricity_nips`
 dataset, which uses the benchmark's *official* split and a rolling-window test
-protocol. When we run E0 (heavy/Colab env) we switch to `electricity_nips` via
-GluonTS; everything else in the pipeline is unchanged because every model consumes
-the same `ForecastDataset` contract.
+protocol. E0 swaps to `electricity_nips` via GluonTS; everything else in the pipeline
+is unchanged because every model consumes the same `ForecastDataset` contract.
+
+That swap is now implemented — see :mod:`src.data.electricity_nips` (the loader),
+``configs/data_electricity_nips.yaml`` (the config, with H/τ identical to this one so
+the *split* is the only variable) and the ``--crps-sum`` flag on the runners. Build it
+with ``source.loader: gluonts_electricity_nips``; the published metric
+(:func:`src.eval.metrics.crps_sum`) is emitted only on that opt-in path.
 
 Run as a script for a smoke test of shapes::
 

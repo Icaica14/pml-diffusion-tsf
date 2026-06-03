@@ -79,6 +79,10 @@ def main() -> None:
                         help="Score the test split in chunks of this many windows "
                              "(0 = eager). Required for Electricity (D=321): its full "
                              "(N, S, tau, D) sample tensor is hundreds of GB.")
+    parser.add_argument("--crps-sum", action="store_true",
+                        help="Also emit CRPS_sum, the published multivariate metric "
+                             "(TimeGrad/CSDI). Meaningful for the E0 reproduce-gate "
+                             "(--config configs/data_electricity_nips.yaml).")
     parser.add_argument("--seed", type=int, default=None, help="Override the config seed.")
     parser.add_argument("--registry", default=str(REPO_ROOT / "results" / "registry.csv"))
     args = parser.parse_args()
@@ -127,7 +131,8 @@ def main() -> None:
     if args.chunk and args.chunk > 0:
         t0 = time.perf_counter()
         metrics, n_windows = evaluate_streaming(
-            ds, model, "test", scale, args.chunk, scaled=False, levels=(0.5, 0.9)
+            ds, model, "test", scale, args.chunk, scaled=False, levels=(0.5, 0.9),
+            crps_sum=args.crps_sum,
         )
         predict_s = time.perf_counter() - t0
     else:
@@ -135,7 +140,9 @@ def main() -> None:
         t0 = time.perf_counter()
         point, samples = model.predict(te_ctx)
         predict_s = time.perf_counter() - t0
-        metrics = evaluate_forecast(te_tgt, point, samples, scale, levels=(0.5, 0.9))
+        metrics = evaluate_forecast(
+            te_tgt, point, samples, scale, levels=(0.5, 0.9), crps_sum=args.crps_sum
+        )
         n_windows = int(te_tgt.shape[0])
 
     row = {
@@ -177,6 +184,9 @@ def main() -> None:
     print("  calib   : "
           f"cov50={metrics['cov50']:.3f} (width {metrics['width50']:.4f})  "
           f"cov90={metrics['cov90']:.3f} (width {metrics['width90']:.4f})")
+    if "CRPS_sum" in metrics:
+        print(f"  E0      : CRPS_sum={metrics['CRPS_sum']:.6f}  "
+              f"(published-protocol metric; compare to TimeGrad/CSDI tables)")
     print(f"  time    : fit {fit_s:.1f}s  predict {predict_s:.1f}s  "
           f"->  appended to {Path(args.registry).name}")
 

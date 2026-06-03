@@ -209,6 +209,82 @@ def pinball_loss(
 
 
 # ---------------------------------------------------------------------------
+# CRPS-sum — the *published* multivariate metric (TimeGrad / CSDI / GluonTS)
+# ---------------------------------------------------------------------------
+# The GluonTS deciles, i.e. the default quantile grid of `gluonts.evaluation.Evaluator`.
+# `CRPS_sum` in the literature == its `mean_wQuantileLoss` over exactly these 9 levels.
+_CRPS_SUM_QUANTILES = np.round(np.arange(0.1, 0.95, 0.1), 2)  # 0.1, 0.2, …, 0.9
+
+
+def _crps_sum_accumulators(
+    y_true: ArrayLike, samples: ArrayLike, quantiles: np.ndarray
+) -> tuple[np.ndarray, float]:
+    """Per-chunk pieces of the normalized CRPS-sum: ``(QL_per_quantile, Σ|y_agg|)``.
+
+    Factored out so the eager :func:`crps_sum` and the streaming
+    :class:`ForecastEvaluator` compute *bit-for-bit* the same thing. We first
+    **aggregate over the channel axis** (sum across the ``D`` series) — that is what
+    makes this the "sum" variant — turning the ``(N, τ, D)`` truth into a univariate
+    aggregated series ``(N, τ)`` and the ``(N, S, τ, D)`` ensemble into ``(N, S, τ)``.
+
+    Returns
+    -------
+    ql : ``(Q,)`` — for each quantile level, ``Σ_positions 2·ρ_q`` (GluonTS's
+        un-normalized quantile loss, summed over every ``(N, τ)`` position in the chunk).
+    den : scalar — ``Σ_positions |y_agg|`` for the chunk (the normalizer).
+    """
+    y_true = np.asarray(y_true, dtype=np.float64)
+    samples = np.asarray(samples, dtype=np.float64)
+    y_agg = y_true.sum(axis=-1)  # (N, τ) — sum over the D channels
+    s_agg = samples.sum(axis=-1)  # (N, S, τ)
+    pred_q = np.quantile(s_agg, quantiles, axis=1)  # (Q, N, τ) — quantiles over S
+    diff = y_agg[None] - pred_q  # (Q, N, τ)
+    qb = quantiles.reshape((-1,) + (1,) * (diff.ndim - 1))  # (Q, 1, 1)
+    pinball = np.maximum(qb * diff, (qb - 1.0) * diff)  # (Q, N, τ)
+    ql = 2.0 * pinball.reshape(len(quantiles), -1).sum(axis=1)  # (Q,)
+    den = float(np.abs(y_agg).sum())
+    return ql, den
+
+
+def crps_sum(
+    y_true: ArrayLike,
+    samples: ArrayLike,
+    quantiles: Iterable[float] = _CRPS_SUM_QUANTILES,
+) -> float:
+    """Normalized **CRPS-sum**, the headline number in the diffusion-TSF literature.
+
+    This is the metric TimeGrad, CSDI and ScoreGrad report on ``electricity_nips`` and
+    friends, computed exactly as ``gluonts.evaluation.MultivariateEvaluator`` does with
+    ``target_agg_funcs={"sum": np.sum}``:
+
+        CRPS_sum = mean_q  [ ( Σ_t 2·ρ_q( y_t^Σ , q-th quantile of F_t^Σ ) ) / Σ_t |y_t^Σ| ]
+
+    where ``y_t^Σ = Σ_d y_{t,d}`` is the **sum over channels** and ``ρ_q`` is the pinball
+    loss. Two features make it comparable across papers: the channel-sum (so it scores the
+    *joint* forecast of the aggregate, not the marginals) and the **normalization by
+    ``Σ|y^Σ|``**, which makes it scale-free (Electricity lands around ~0.02, not the ~10²
+    of our per-position :func:`crps_ensemble`). It is therefore *not* on the same scale as
+    ``CRPS`` and the two must never be compared directly.
+
+    Why it is opt-in (see :func:`evaluate_forecast`): the number is only meaningful against
+    the literature under the *published protocol* (the ``electricity_nips`` split + rolling
+    windows). Computed on our LSTNet split it is internally consistent but matches no
+    published figure, so we surface it only on the E0 reproduce-gate path.
+    """
+    qs = np.asarray(list(quantiles), dtype=np.float64)
+    ql, den = _crps_sum_accumulators(y_true, samples, qs)
+    if den == 0.0:
+        return float("nan")
+    return float((ql / den).mean())
+
+
+# Stable handle to the function above: callers (evaluate_forecast / ForecastEvaluator)
+# take a boolean ``crps_sum`` kwarg that would shadow the name ``crps_sum`` in their
+# local scope, so they invoke the metric through this alias instead.
+_compute_crps_sum = crps_sum
+
+
+# ---------------------------------------------------------------------------
 # Convenience aggregator
 # ---------------------------------------------------------------------------
 def evaluate_forecast(
@@ -217,12 +293,17 @@ def evaluate_forecast(
     samples: ArrayLike,
     mase_scale: ArrayLike,
     levels: Iterable[float] = (0.5, 0.9),
+    crps_sum: bool = False,
 ) -> dict[str, float]:
     """Compute every metric in one call and return a flat ``{name: value}`` dict.
 
     ``levels`` is the set of central-interval coverages to report (default 50% and
     90%). Keys are emitted as ``cov50``/``width50``/``cov90``/``width90`` so they
     slot straight into the results registry as columns.
+
+    ``crps_sum`` is **off by default** so every existing run produces the identical dict
+    (FASE-B: banked numbers untouched). Set it on the E0 reproduce-gate path to also emit
+    ``CRPS_sum`` — the published multivariate metric (see :func:`crps_sum`).
     """
     out: dict[str, float] = {
         "MAE": mae(y_true, point),
@@ -235,6 +316,8 @@ def evaluate_forecast(
         pct = int(round(level * 100))
         out[f"cov{pct}"] = interval_coverage(y_true, samples, level)
         out[f"width{pct}"] = interval_width(samples, level)
+    if crps_sum:
+        out["CRPS_sum"] = globals()["crps_sum"](y_true, samples)
     return out
 
 
@@ -259,7 +342,12 @@ class ForecastEvaluator:
     then read ``result()``.
     """
 
-    def __init__(self, mase_scale: ArrayLike, levels: Iterable[float] = (0.5, 0.9)) -> None:
+    def __init__(
+        self,
+        mase_scale: ArrayLike,
+        levels: Iterable[float] = (0.5, 0.9),
+        crps_sum: bool = False,
+    ) -> None:
         self.scale = np.asarray(mase_scale, dtype=np.float64)
         self.levels = tuple(levels)
         self.n = 0          # total positions folded in (N·τ·D)
@@ -270,6 +358,12 @@ class ForecastEvaluator:
         self._pin = 0.0     # Σ pinball_position (grid-averaged)
         self._cov = {lv: 0.0 for lv in self.levels}
         self._wid = {lv: 0.0 for lv in self.levels}
+        # CRPS-sum is normalized by Σ|y_agg| (not a position-mean), so it needs its own
+        # numerator/denominator accumulators rather than the n-weighted-mean pattern above.
+        self._crps_sum = bool(crps_sum)
+        self._csum_q = _CRPS_SUM_QUANTILES
+        self._csum_ql = np.zeros(len(self._csum_q), dtype=np.float64)  # Σ QL_q over positions
+        self._csum_den = 0.0                                          # Σ |y_agg|
 
     def update(self, y_true: ArrayLike, point: ArrayLike, samples: ArrayLike) -> None:
         """Fold one chunk of windows into the running totals.
@@ -291,6 +385,10 @@ class ForecastEvaluator:
         for lv in self.levels:
             self._cov[lv] += interval_coverage(y_true, samples, lv) * n
             self._wid[lv] += interval_width(samples, lv) * n
+        if self._crps_sum:
+            ql, den = _crps_sum_accumulators(y_true, samples, self._csum_q)
+            self._csum_ql += ql
+            self._csum_den += den
 
     def result(self) -> dict[str, float]:
         """Finalize and return the same ``{name: value}`` dict as :func:`evaluate_forecast`."""
@@ -307,6 +405,12 @@ class ForecastEvaluator:
             pct = int(round(lv * 100))
             out[f"cov{pct}"] = self._cov[lv] / self.n
             out[f"width{pct}"] = self._wid[lv] / self.n
+        if self._crps_sum:
+            out["CRPS_sum"] = (
+                float((self._csum_ql / self._csum_den).mean())
+                if self._csum_den != 0.0
+                else float("nan")
+            )
         return out
 
 
@@ -318,6 +422,7 @@ def evaluate_streaming(
     chunk_size: int,
     scaled: bool = False,
     levels: Iterable[float] = (0.5, 0.9),
+    crps_sum: bool = False,
 ) -> tuple[dict[str, float], int]:
     """Score ``model`` on a split in memory-bounded chunks; return ``(metrics, n_windows)``.
 
@@ -327,8 +432,11 @@ def evaluate_streaming(
     worth of samples live at once, so this scales to Electricity's 321 channels where the
     eager :meth:`~src.data.contract.ForecastDataset.windows` path would need hundreds of
     GB. ``metrics`` is identical in shape to :func:`evaluate_forecast`'s output.
+
+    ``crps_sum`` (off by default) additionally emits the published ``CRPS_sum`` metric;
+    the E0 reproduce-gate runner turns it on. See :func:`crps_sum`.
     """
-    ev = ForecastEvaluator(mase_scale, levels=levels)
+    ev = ForecastEvaluator(mase_scale, levels=levels, crps_sum=crps_sum)
     n_windows = 0
     for ctx, tgt in dataset.iter_windows(split, chunk_size, scaled=scaled):
         point, samples = model.predict(ctx)
