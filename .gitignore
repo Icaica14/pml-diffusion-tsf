@@ -20,6 +20,9 @@ wandb/
 results/**/*.parquet
 figures/**/*.gif
 
+# --- Run logs (stderr/stdout captured during sweeps) ---
+*.log
+
 # --- Course materials: copyright; the professor's notes must NOT be redistributed ---
 *.pdf
 notes/
