@@ -4,7 +4,7 @@
 > controllato su consumi elettrici (M0 → M4).**
 > Gruppo: **Giovanni Mason (SM3800158) · Lorenzo Di Bernardo (SM3800132) · Lorenzo Karol Gobbo (SM28A00018)** · Appello **10 giugno 2026**.
 
-Questa cartella `deliverables/final/` è il **pacchetto autosufficiente** da consegnare/zippare.
+Questa cartella `consegna_finale/` è il **pacchetto autosufficiente** da consegnare/zippare.
 Tutto ciò che serve al professore è qui dentro; il resto del repo è il codice che lo produce.
 
 ---
@@ -34,21 +34,21 @@ equo e a misurare il compromesso tra qualità della distribuzione, calibrazione 
 | 3 | [`slides/deck_electricity_it.pdf`](slides/deck_electricity_it.pdf) | **Le slide in PDF** (autosufficienti) — da proiettare. ~10 slide + backup B1–B7. |
 | 4 | [`slides/deck_electricity_it.pptx`](slides/deck_electricity_it.pptx) | Le slide in PowerPoint (note del relatore nel pannello note). |
 | 5 | [`slides/deck_electricity_it.md`](slides/deck_electricity_it.md) | Il **sorgente** delle slide (Markdown/pandoc). *Le immagini sono incorporate nel PDF/PPTX; il `.md` referenzia `figures/presentation/` dal root del repo — rigenera con `build_deck.sh`.* |
-| 6 | [`SPEAKER_SCRIPT_8_MIN_IT.md`](SPEAKER_SCRIPT_8_MIN_IT.md) | **Copione 8–10 min**, diviso A (Giovanni) · B (Lorenzo Di Bernardo) · C (Lorenzo Karol Gobbo). |
-| 7 | [`QA_ORALE_ELECTRICITY_IT.md`](QA_ORALE_ELECTRICITY_IT.md) | **Banca Q&A orale** (37 domande+risposte) con i numeri a memoria. |
+| 6 | [`SCRIPT_PRESENTAZIONE.md`](SCRIPT_PRESENTAZIONE.md) | **Copione 8–10 min**, diviso A (Giovanni) · B (Lorenzo Di Bernardo) · C (Lorenzo Karol Gobbo). |
+| 7 | [`DOMANDE_ORALE.md`](DOMANDE_ORALE.md) | **Banca Q&A orale** (37 domande+risposte) con i numeri a memoria. |
 | 8 | [`tables/`](tables/) | Tabelle finali **generate** dal registry: `comparison_electricity.{md,csv}`, `comparison_exchange.{md,csv}`. |
 | 9 | [`figures/`](figures/) | Le 6 figure di confronto: CRPS, MASE, calibrazione, intervalli, costo, qualità-vs-costo. |
 | 10 | [`economic/`](economic/) | **E6** (valore economico, demo M0): `value_electricity.{md,csv}` + `fig_e6_money.png`. |
 | 11 | [`REPRODUCIBILITY.md`](REPRODUCIBILITY.md) | Come re-derivare ogni numero/artefatto (ambiente, dati, protocollo, comandi). |
 | 12 | [`CHECKLIST_CONSEGNA_IT.md`](CHECKLIST_CONSEGNA_IT.md) | **Checklist finale** prima di consegnare (cosa mandare, controlli, limiti). |
-| 13 | `README_DELIVERABLES_IT.md` | *(questo file)* l'indice del pacchetto. |
-| 14 | [`ONE_PAGE_SUMMARY_IT.md`](ONE_PAGE_SUMMARY_IT.md) | **Sintesi di una pagina** (IT): domanda, dati, modelli, metriche, tre risultati, limiti — per capire in fretta cosa abbiamo fatto. |
+| 13 | `LEGGIMI_CONSEGNA.md` | *(questo file)* l'indice del pacchetto. |
+| 14 | [`SINTESI_PROGETTO.md`](SINTESI_PROGETTO.md) | **Sintesi di una pagina** (IT): domanda, dati, modelli, metriche, tre risultati, limiti — per capire in fretta cosa abbiamo fatto. |
 
 ---
 
 ## Per il professore: il percorso di lettura consigliato
 
-1. **`ONE_PAGE_SUMMARY_IT.md`** — una pagina per inquadrare in fretta cosa abbiamo fatto.
+1. **`SINTESI_PROGETTO.md`** — una pagina per inquadrare in fretta cosa abbiamo fatto.
 2. **Slide PDF** (`slides/deck_electricity_it.pdf`) — la stessa storia in 8 minuti.
 3. **`REPORT.md`** — la trattazione completa (§0 sintesi esecutiva, §6 esperimenti, §8 limiti).
 4. **`tables/comparison_electricity.md`** — i numeri principali in una tabella.

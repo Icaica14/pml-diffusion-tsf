@@ -1,13 +1,14 @@
 # Probabilistic Time-Series Forecasting with Diffusion Models
 
-> **Can a diffusion model produce *probabilistic* forecasts of a future time series — a distribution of plausible futures rather than a single number — that are more accurate, better calibrated, or more informative than classical and deep-learning baselines, and at what computational cost?**
+> In our setting, does a *conditional diffusion model* produce probabilistic forecasts that beat classical and deep-learning baselines on accuracy and calibration — and at what sampling cost?
 
-![status](https://img.shields.io/badge/status-results%20in-brightgreen)
+![status](https://img.shields.io/badge/status-pipeline%20complete-brightgreen)
 ![license](https://img.shields.io/badge/license-MIT-blue)
 ![course](https://img.shields.io/badge/course-PML%20%C2%B7%20UniTS-8A2BE2)
 ![python](https://img.shields.io/badge/python-3.10%2B-3776AB)
 
 **Exam project for the *Probabilistic Machine Learning* (PML) course — University of Trieste, Prof. Luca Bortolussi.**
+**Delivery branch:** `feature/port-ladder-exchange` (not yet merged into `main` — please use this branch).
 
 🇬🇧 English (below) · 🇮🇹 [Versione italiana](#-in-italiano)
 
@@ -15,152 +16,170 @@
 
 ## Overview
 
-Most forecasts give you a single number — *"tomorrow's electricity demand will be 100."* But the future is uncertain, and one number hides that uncertainty entirely. A more useful forecast says: *"here are the plausible tomorrows, and how likely each one is"* — a whole **distribution** of futures instead of one guess.
+Most forecasts give a single number — *"tomorrow's electricity demand will be 100."* The future is uncertain, and one number hides that. We treat forecasting as estimating the conditional distribution `p(future | past)` and implement it with a **conditional diffusion model** — the generative family the PML course covers in its final chapter, here made conditional on the past. We compare it against a seasonal-naive baseline, a classical model (ARIMA), and a deep probabilistic model (DeepAR), measuring four things: point accuracy (MAE/RMSE/MASE), probabilistic quality (CRPS, coverage, calibration), sampling/training cost, and a small economic-value demo (scheduling a battery on each forecast).
 
-That is what this project builds. We treat forecasting as one question: *given everything seen so far (the past), what does the distribution of possible futures look like?* — written `p(future | past)`. To answer it we use a **diffusion model**: the same family of generative models behind modern image generators, retrained here to *generate plausible future trajectories of a time series* instead of pictures. It learns from the exact objective the PML course derives in its final chapter — our twist is to make it **conditional on the past**.
+The result is **not** a win for diffusion. In our setting no trained model beats the seasonal-naive on CRPS on Electricity; whatever diffusion adds is conditional on the horizon, the dataset, the target parameterization (x0 vs ε), and a sampling cost we measure. We read this as a controlled comparison, not a model coronation.
 
-We compare it head-to-head against a naive baseline, a classical statistical model (ARIMA/ETS), and a deep autoregressive probabilistic model (DeepAR), and we measure **four** things the exam rewards:
+## Research question
 
-- **Point accuracy** — MAE, RMSE, MASE
-- **Probabilistic quality** — CRPS, interval coverage, calibration
-- **Cost** — training/inference time, and the quality-vs-denoising-steps trade-off
-- **Economic value** — the *money saved* when a real decision (scheduling a battery against a time-of-use price) is driven by each model's forecast, because a better-calibrated distribution makes cheaper, more robust decisions (see [Economic value](#economic-value--turning-forecasts-into-money) below)
+Can a conditional diffusion model forecast `p(future | past)` better — on accuracy and calibration — than a naive baseline, a classical model, and a deep autoregressive model, and is any improvement worth its sampling cost? This is the PML course's final-chapter topic (unconditional generation) extended to **conditional** forecasting.
 
-Our finding is not a win for diffusion. In our experiments no trained model beats the seasonal-naive baseline on CRPS on Electricity, and the best-calibrated model on the ladder is **DeepAR**, not a diffusion. Whatever advantage diffusion brings is conditional — it depends on the horizon, the dataset, the target parameterization (x0 vs ε), and a sampling cost we can measure.
+## Project status
 
-## Status
-
-🟢 **Pipeline complete; full results in.** The whole model ladder runs on both datasets (M0→M3 on each; the fifth rung, **M4 TimeDiff**, on the primary Electricity dataset), the head-to-head tables and figures are *generated* from the registry (never hand-typed), and the economic-value pillar (E6) is built. Every number below is real, from `results/registry.csv`.
-
-**Model × dataset — all rungs evaluated:**
+🟢 **Pipeline complete; results banked in `results/registry.csv`.** The model ladder M0→M3 runs on both datasets; the fifth rung **M4 TimeDiff** (and its **M4ε** ε-ablation) runs on the primary Electricity dataset. Tables and figures are *generated* from the registry, never hand-typed.
 
 | | M0 naive | M1 ARIMA | M2 DeepAR | M3 TimeGrad | M4 TimeDiff |
 |---|:---:|:---:|:---:|:---:|:---:|
 | **Exchange** (D=8, sandbox) | ✅ | ✅ | ✅ | ✅ | — |
-| **Electricity** (D=321, primary) | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **Electricity** (D=321, primary) | ✅ | ✅ | ✅ | ✅ | ✅ + ε-ablation |
 
-**Headline (Electricity, CRPS ↓ — the probabilistic-quality metric):** the seasonal-naive bar is **160.5**, and *no trained model beats it* — DeepAR 253.7, **TimeGrad 241.6** (better than DeepAR, but not the naive), **TimeDiff 287.3**, ARIMA 867.5. This is the project's honest finding: on a strongly seasonal signal a simple baseline is a serious opponent, and diffusion's richer uncertainty does not pay for its sampling cost *here*. The two diffusion models make the point from opposite ends: **M3 TimeGrad** (autoregressive) is the better-calibrated but slow one (~4 h to sample), while **M4 TimeDiff** (non-autoregressive) samples in ~41 min and has the lowest point error of any deep model, yet in its x0-prediction form the predictive **collapses** (coverage ≈ 0, CRPS ≈ MAE). Our ε-prediction ablation does **not** recalibrate it — it flips TimeDiff to the opposite failure (coverage ≈ 1, intervals ~40× wider, MASE 4.0): x0 under-disperses, ε over-disperses, and proper calibration needs more than a parameterization swap. The best-calibrated model on the whole ladder is **DeepAR**, not a diffusion.
+**Experiments:** `E1` main comparison and `E6` economic-value demo are done; `E2` horizon sweep and `E3` denoising-steps sweep are in progress; `E0` reproduce-gate and `E4` regime-shift are planned (see [Limitations & future work](#limitations--future-work)).
 
-**Experiments:** `E1` main comparison ✅ · `E6` economic value ✅ · `E2` horizon sweep / `E3` denoising-steps 🟡 in progress · `E0` reproduce-gate, `E4` regime-shift ⏳ planned.
+## Final deliverables
 
-| Document | Description |
+The self-contained package for the professor lives in **[`consegna_finale/`](consegna_finale/)** — start from **[`LEGGIMI_CONSEGNA.md`](consegna_finale/LEGGIMI_CONSEGNA.md)**, which indexes it.
+
+| What | File |
 |---|---|
-| [`REPORT.md`](REPORT.md) | **The full scientific report** (Italian): theory, the M0–M4 ladder, the four evaluation pillars, every experiment, real results, and the project's honest findings. |
-| [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md) · [`_IT`](docs/IMPLEMENTATION_PLAN_IT.md) | The complete, execution-ready implementation plan (EN + IT), with a deep appendix (E) on the experimental phase. |
-| [`docs/presentation/`](docs/presentation/) | The 8-minute Electricity deck (FASE B, real M3 + M4 numbers): slide template, speaker script, figure plan, oral-Q&A bank. |
-| [`docs/EDA_EXCHANGE.md`](docs/EDA_EXCHANGE.md) | Figure-backed exploratory analysis of the Exchange sandbox dataset (random-walk levels, volatility clustering, heavy tails). |
-| `results/tables/comparison_*.md` | Auto-generated head-to-head tables (one per dataset). |
+| Slides (8-min talk) | [`consegna_finale/slides/deck_electricity_it.pdf`](consegna_finale/slides/deck_electricity_it.pdf) |
+| Full scientific report (PDF) | [`consegna_finale/REPORT.pdf`](consegna_finale/REPORT.pdf) |
+| One-page summary (PDF) | [`consegna_finale/SINTESI_PROGETTO.pdf`](consegna_finale/SINTESI_PROGETTO.pdf) |
+| Package index | [`consegna_finale/LEGGIMI_CONSEGNA.md`](consegna_finale/LEGGIMI_CONSEGNA.md) |
 
-## Approach at a glance
+The report source (Markdown, Italian) is also at the repo root: [`REPORT.md`](REPORT.md).
 
-**The model ladder** (each rung a stronger opponent):
+## Main results
+
+Electricity, identical protocol for every model (test split, H=168, τ=24, S=100 samples, seed=42). Lower is better for CRPS and MASE; coverage targets are 0.50 and 0.90.
+
+| Model | CRPS ↓ | MASE ↓ | cov50 | cov90 |
+|---|---:|---:|---:|---:|
+| **M0 seasonal-naive** | **160.5** | 1.00 | 0.50 | 0.89 |
+| M1 ARIMA (per-channel) | 867.5 | 3.66 | 0.59 | 0.93 |
+| M2 DeepAR | 253.7 | 1.83 | 0.47 | 0.83 |
+| M3 TimeGrad | 241.6 | 1.39 | 0.28 | 0.65 |
+| M4 TimeDiff (x0) | 287.3 | 1.40 | 0.00 | 0.01 |
+| M4ε TimeDiff (ε) | 1376.3 | 4.02 | 1.00 | 1.00 |
+
+What the numbers say, in our setting:
+
+- On Electricity the **seasonal-naive stays the strongest baseline on CRPS** (160.5); no trained model beats it.
+- **TimeGrad improves on DeepAR on CRPS** (241.6 vs 253.7) but does not beat M0, and it is expensive — sampling takes ~4 h 19 min.
+- **DeepAR is the most calibrated of the trained models** (coverage 0.47 / 0.83, closest to the 0.50 / 0.90 targets).
+- **TimeDiff x0 collapses the predictive variance** (coverage ≈ 0) despite a competitive point error; the **ε-ablation over-disperses** (coverage ≈ 1, MASE 4.0). x0 under-disperses, ε over-disperses — a parameterization swap does not calibrate it.
+
+## Datasets
+
+| Dataset | Role | Shape | Notes |
+|---|---|---|---|
+| **Exchange** | sandbox / negative control | D=8, daily | near random-walk; M0 is hard to beat — a sanity check |
+| **Electricity** | primary | D=321, hourly | strong daily/weekly seasonality |
+
+Both come from the LSTNet multivariate time-series collection: <https://github.com/laiguokun/multivariate-time-series-data>. We use the raw LSTNet file with **our own 70/10/20 split**, **not** the published `electricity_nips` split — so our CRPS is an **internal** comparison across our own models, not directly comparable to published paper tables (see [Limitations](#limitations--future-work)). Raw data is not committed; the loaders fetch/build it.
+
+## Models compared
 
 | Model | Role | Library |
 |---|---|---|
-| **M0 — Seasonal-naive** | the honesty anchor — must be beaten | NumPy / Darts |
-| **M1 — ARIMA / ETS** | the classical statistical baseline | statsforecast |
-| **M2 — DeepAR** | the *fair* deep probabilistic baseline | GluonTS |
-| **M3 — TimeGrad** | the frontier: *autoregressive* conditional diffusion *(centerpiece)* | PyTorchTS |
-| **M4 — TimeDiff** | the *non-autoregressive* diffusion variant — one reverse chain over the whole horizon, fast sampling | PyTorch (self-contained) |
-| *+ toy DDPM* | a ~150-line from-scratch conditional DDPM — the "understanding artifact" | PyTorch |
-
-**The experiments** (each numbered, falsifiable, producing one artifact):
-
-`E0` reproduce-a-published-result gate · `E1` main comparison · `E2` horizon sweep · `E3` denoising-steps vs quality & cost · `E4` regime-shift robustness · `E6` **economic value (battery dispatch)** · `E5` generality (stretch).
-
-See [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md) Parts 5–7 for the full specification.
-
-## Economic value — turning forecasts into money
-
-A forecast only matters if it changes a **decision**. Our fourth evaluation pillar makes that concrete: we use each model's forecast to **schedule a battery** (charge when power is cheap, discharge when it's expensive) against a time-of-use electricity price, then price the result.
-
-- A **point** forecast plans against a single guessed future; a **distribution** (diffusion / DeepAR samples) plans against the whole spread of plausible futures, hedging its bets.
-- The schedule is a small **linear program**; with a distribution we minimize the *expected* bill over the model's sampled trajectories (sample-average approximation).
-- We apply every schedule to the **true** future and read off the realized bill, then report **money saved** vs a naive baseline (ceiling) and a perfect-foresight **oracle** (lower bound) — so euros are always shown as a fraction of what was actually achievable.
-- The punchline ties the pillars together: optimal storage decisions use a **quantile** of the predictive distribution (a *newsvendor* structure), and **CRPS is the average decision regret over all cost ratios** — so a better-calibrated forecast should literally save more money. `E6` tests whether it does.
-
-This is a **bolt-on module** (`src/eval/economic.py`) that runs *over the forecasts E1 already produces* — **no extra training** — so it adds a headline result without enlarging the core project. Full protocol in [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md) §3.5, §6.4, and experiment E6.
+| **M0 — Seasonal-naive** | the baseline to beat | NumPy |
+| **M1 — ARIMA** | classical statistical baseline (one model per channel) | statsforecast |
+| **M2 — DeepAR** | deep autoregressive probabilistic baseline | GluonTS |
+| **M3 — TimeGrad** | *autoregressive* conditional diffusion (ε-prediction) | PyTorchTS |
+| **M4 — TimeDiff** | *non-autoregressive* conditional diffusion (x0-prediction) | PyTorch (self-contained) |
+| *M4ε* | TimeDiff ε-prediction ablation | PyTorch |
+| *+ toy DDPM* | a ~150-line from-scratch conditional DDPM, didactic only | PyTorch |
 
 ## Repository structure
 
-Every folder also carries a `CHE_COSA_SONO.md` (Italian) describing its files, so the repo is self-documenting.
+Every folder also carries a `CHE_COSA_SONO.md` (Italian) describing its files.
 
 ```
 pml-diffusion-tsf/
 ├── README.md · CONTRIBUTING.md · requirements.txt
-├── docs/                     # implementation plan (EN + IT); presentation/ = the 8-min deck
+├── docs/                     # implementation plan (EN + IT); presentation/ = the 8-min deck source
 ├── configs/                  # one YAML per dataset (data_exchange.yaml, data_electricity.yaml)
 ├── src/
-│   ├── data/                 # the data contract: loaders, temporal split, train-only scaling, windowing
-│   ├── models/               # the ladder wrappers: naive (M0), arima (M1), deepar (M2), timegrad (M3), timediff (M4)
-│   ├── eval/                 # metrics (CRPS, coverage, calibration), registry, economic.py (E6 battery dispatch)
-│   ├── viz/                  # (placeholder) plotting currently lives in experiments/
+│   ├── data/                 # data contract: loaders, temporal split, train-only scaling, windowing
+│   ├── models/               # ladder wrappers: naive (M0), arima (M1), deepar (M2), timegrad (M3), timediff (M4)
+│   ├── eval/                 # metrics (CRPS, coverage, calibration), registry, economic.py (E6)
 │   └── utils/                # seeds, config loading, GluonTS freq-compat shim
 ├── experiments/              # run_{naive,arima,deepar,timegrad,timediff}.py + make_tables.py + plot_*.py + run_economic.py
 ├── notebooks/                # Exchange EDA + the Colab GPU notebooks (M2/M3/M4)
-├── tests/                    # data-contract + economic-LP unit tests (18 green)
-├── results/                  # registry.csv (single source of truth) + tables/ + economic/ (committed)
-└── figures/                  # generated plots; presentation/ = the deck figures (committed)
+├── tests/                    # data-contract + economic-LP unit tests
+├── results/                  # registry.csv (single source of truth) + tables/ + economic/
+├── figures/                  # generated plots; presentation/ = the deck figures
+└── consegna_finale/          # delivery package: slides (PDF/PPTX), REPORT, one-page summary, speaker script, Q&A, tables, figures
 ```
 
-## Getting started
+## Reproduce the main tables & figures
+
+The deep rows (M2–M4) were trained once on a Colab GPU and banked in the registry; everything below regenerates locally on CPU in seconds.
 
 ```bash
-pip install -r requirements.txt          # light local env (data, M0/M1, eval, plots, E6)
+pip install -r requirements.txt
 
-# run the ladder's local rungs on the sandbox dataset (Exchange):
-python -m experiments.run_naive   --config configs/data_exchange.yaml   # M0
-python -m experiments.run_arima   --config configs/data_exchange.yaml   # M1
+# tables + figures, parsed from results/registry.csv (idempotent):
+python -m experiments.make_tables          # -> results/tables/comparison_*.md
+python -m experiments.plot_presentation    # -> figures/presentation/fig_cmp_*.png
 
-# assemble the head-to-head tables and the deck figures from the registry:
-python -m experiments.make_tables                 # -> results/tables/comparison_*.md
-python -m experiments.plot_presentation           # -> figures/presentation/fig_cmp_*.png
+# the economic-value demo (E6, M0, no training):
+python -m experiments.run_economic         # -> results/economic/ + fig_e6_money.png
 
-# the economic-value pillar (E6), no training needed:
-python -m experiments.run_economic                # -> results/economic/ + fig_e6_money.png
-pytest -q                                         # 18 tests
+pytest -q                                  # light unit tests (no GPU, no data download)
 ```
 
-**Two environments.** A light **local** one (above: data, classical baselines M0/M1, evaluation, plots, the E6 LP) and a **Colab/GPU** one for the deep models M2 (DeepAR), M3 (TimeGrad), and M4 (TimeDiff) — see [`notebooks/`](notebooks/). The PyTorchTS ↔ GluonTS combo (M2/M3) is fragile and is pinned in `requirements.txt`; **M4 TimeDiff is self-contained PyTorch** (stock Colab torch, no pinning).
+Re-training the deep models needs a CUDA GPU and is optional — full protocol in [`consegna_finale/REPRODUCIBILITY.md`](consegna_finale/REPRODUCIBILITY.md). The PyTorchTS ↔ GluonTS combo (M2/M3) is fragile and pinned in `requirements.txt`; M4 TimeDiff is self-contained PyTorch.
 
-**Golden rule:** get the whole pipeline green on the small **Exchange** dataset first; *only then* scale up to the primary **Electricity** dataset (`--config configs/data_electricity.yaml`).
+## Limitations & future work
 
-## Team & roles
+- **Internal split.** Our 70/10/20 split is not `electricity_nips`, so CRPS is not paper-comparable. The `E0` reproduce-gate is prepared but **not run** (needs a GPU).
+- **One seed (42), modest budget** (50 epochs, 100 diffusion steps, little tuning) — a plausible reason a diffusion model does not shine here, disclosed as such.
+- **Calibration is unsolved for TimeDiff:** neither x0 nor ε is well-calibrated; learned-variance or conformal post-hoc calibration is future work.
+- **Economic value (E6) is a demo on M0** only; the cross-model money comparison is future work.
+- **E2/E3** (horizon and denoising-step sweeps) are in progress; **E4** (regime-shift) is planned; the toy DDPM is a didactic artifact, not a result.
 
-Each member owns one vertical slice end-to-end (so each can defend it in the individual oral exam):
+Full detail in the report ([`REPORT.md`](REPORT.md) / [`consegna_finale/REPORT.pdf`](consegna_finale/REPORT.pdf)).
 
-| Role | Owns | Member |
+## Team
+
+| Member | Matricola | Owns |
 |---|---|---|
-| **A — Baselines & Statistics** | M0, M1, classical/PML-statistics narrative, point metrics | Giovanni Mason · SM3800158 |
-| **B — Diffusion & Infrastructure** | M2, M3, M4, the toy DDPM, Colab/training, configs | Lorenzo Di Bernardo · SM3800132 |
-| **C — Evaluation, Viz & Story** | CRPS/coverage/calibration, all figures, slide narrative, oral Q&A bank | Lorenzo Karol Gobbo · SM28A00018 |
+| Giovanni Mason | SM3800158 | M0, M1, classical/statistics narrative, point metrics |
+| Lorenzo Di Bernardo | SM3800132 | M2, M3, M4, the toy DDPM, Colab/training, configs |
+| Lorenzo Karol Gobbo | SM28A00018 | CRPS/coverage/calibration, figures, slide narrative, oral Q&A |
 
 ## Course context
 
-The PML course *ends* on diffusion models (unconditional generation). This project's originality is to **extend that final chapter from unconditional generation to *conditional* forecasting**, `p(future | past)`, and to discuss explicitly *which* uncertainty the model captures — **aleatoric** (the spread of plausible futures) vs **epistemic** (model/parameter uncertainty, which a point-estimated diffusion model does *not* capture). The implementation plan maps every component back to a specific chapter/page of the course notes.
+The PML course ends on diffusion models for unconditional generation. This project extends that final chapter to **conditional** forecasting, `p(future | past)`, and discusses which uncertainty the model captures — **aleatoric** (the spread of plausible futures) vs **epistemic** (model/parameter uncertainty, which a point-estimated diffusion model does not capture). The implementation plan ([`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md) · [`_IT`](docs/IMPLEMENTATION_PLAN_IT.md)) maps each component back to a section of the course notes.
 
-## Contributing
+## License & course materials
 
-Colleagues: see [`CONTRIBUTING.md`](CONTRIBUTING.md) for branch conventions, how to pick up a role, and the definition of "done" for each experiment.
-
-## A note on course materials
-
-This repository **intentionally does not include** the professor's lecture notes or any course textbooks. Those are copyrighted, and the notes carry an explicit request not to be redistributed. The plan cites them by section and page number only. `*.pdf` files are gitignored as a safeguard.
-
-## License
-
-Released under the [MIT License](LICENSE). If your university's coursework policy requires otherwise, change this before making the work widely public.
+Released under the [MIT License](LICENSE). The repository **intentionally does not include** the professor's lecture notes or course textbooks (copyrighted, and the notes ask not to be redistributed); they are cited by section and page only. `*.pdf` files are gitignored as a safeguard. Colleagues: see [`CONTRIBUTING.md`](CONTRIBUTING.md) for branch conventions.
 
 ---
 
 ## 🇮🇹 In italiano
 
-**Progetto d'esame per il corso di *Probabilistic Machine Learning* (PML, apprendimento automatico probabilistico) — Università di Trieste, Prof. Luca Bortolussi. Gruppo di 3.**
+**Progetto d'esame per il corso di *Probabilistic Machine Learning* (PML) — Università di Trieste, Prof. Luca Bortolussi. Gruppo di 3.**
+**Branch di consegna:** `feature/port-ladder-exchange` (non ancora unito a `main`: fate riferimento a questo branch).
 
-**Domanda di ricerca.** Un *diffusion model* può produrre **forecast probabilistici** di una serie temporale — una *distribuzione* di futuri plausibili invece di un singolo numero — meglio calibrati delle baseline classiche e di deep learning, e a quale costo computazionale?
+**Domanda di ricerca.** Nel nostro setting, un modello di diffusione condizionato produce forecast probabilistici migliori — per accuratezza e calibrazione — di una baseline ingenua, un modello classico (ARIMA) e un modello deep autoregressivo (DeepAR), e l'eventuale miglioramento ripaga il costo di campionamento? È il tema dell'ultimo capitolo del corso (generazione incondizionata) esteso al forecasting **condizionato** `p(futuro | passato)`.
 
-**Idea.** Inquadriamo il forecasting come l'apprendimento della distribuzione generativa condizionata `p(futuro | passato)` e la realizziamo con un diffusion model condizionato, addestrato con lo stesso obiettivo (ELBO / predizione del rumore) che il corso ricava nell'ultimo capitolo. Lo confrontiamo con una baseline ingenua, un modello classico (ARIMA/ETS) e un modello probabilistico di deep learning (DeepAR), misurando **quattro** cose: **accuratezza puntuale** (MAE/RMSE/MASE), **qualità probabilistica** (CRPS, copertura, calibrazione), **costo** e **valore economico** — il denaro risparmiato quando il forecast di ciascun modello programma una batteria contro un prezzo a fasce orarie (esperimento E6, un modulo *sopra i forecast già prodotti*, senza addestramento aggiuntivo).
+**Idea.** Inquadriamo il forecasting come stima della distribuzione condizionata `p(futuro | passato)` e la realizziamo con un diffusion model condizionato, addestrato con lo stesso obiettivo (ELBO / predizione del rumore) del corso. Abbiamo confrontato quattro cose: accuratezza puntuale (MAE/RMSE/MASE), qualità probabilistica (CRPS, copertura, calibrazione), costo (tempo di addestramento e di campionamento) e una piccola demo di valore economico (programmare una batteria sul forecast di ciascun modello, esperimento E6).
 
-**Stato:** 🟢 pipeline completa, risultati in cassaforte. La scala gira su entrambi i dataset (M0→M3 su ciascuno; il quinto gradino, **M4 TimeDiff**, sul dataset principale Electricity); tabelle e figure di confronto sono **generate dalla registry** (mai scritte a mano); il pilastro del valore economico (E6) è costruito. **Risultato chiave (Electricity, CRPS):** la barra del seasonal-naive è **160.5** e **nessun modello addestrato la batte** — DeepAR 253.7, **TimeGrad 241.6** (meglio di DeepAR, non del naive), **TimeDiff 287.3**, ARIMA 867.5. Finding onesto: su un segnale fortemente stagionale una baseline semplice è un avversario serio. I due diffusion model lo mostrano da estremi opposti: **M3 TimeGrad** (autoregressivo) è il più calibrato ma lento (~4h di sampling), mentre **M4 TimeDiff** (non-autoregressivo) campiona in ~41 min ed ha l'errore puntuale più basso tra i deep, ma nella forma x0 la predittiva **collassa** (copertura ≈ 0, CRPS ≈ MAE). La nostra ablazione ε **non** la ricalibra: ribalta TimeDiff nell'estremo opposto (copertura ≈ 1, bande ~40× più larghe, MASE 4.0) — x0 sotto-disperde, ε sovra-disperde, e calibrare richiede più di uno switch di parametrizzazione. Il modello meglio calibrato dell'intera scala è **DeepAR**, non una diffusione. Il **report scientifico completo** (italiano) è in [`REPORT.md`](REPORT.md); il deck di presentazione (8 minuti, FASE B) è in [`docs/presentation/`](docs/presentation/); il piano completo in [`docs/IMPLEMENTATION_PLAN_IT.md`](docs/IMPLEMENTATION_PLAN_IT.md).
+**Risultati principali (Electricity, CRPS più basso è meglio):**
 
-**Per i colleghi:** leggete prima il piano (Parti 1–3), poi la parte del vostro ruolo (A / B / C, vedi tabella sopra). La regola d'oro: far girare tutta la pipeline sul piccolo dataset **Exchange** prima di salire di scala.
+- Su Electricity il **seasonal-naive resta la baseline più forte sul CRPS** (160.5); nessun modello addestrato lo batte.
+- **TimeGrad migliora DeepAR sul CRPS** (241.6 vs 253.7) ma **non batte M0**, ed è costoso (~4h19 di campionamento).
+- **DeepAR è il modello più calibrato tra quelli addestrati** (copertura 0.47 / 0.83, la più vicina ai target 0.50 / 0.90).
+- **TimeDiff x0 collassa la varianza predittiva** (copertura ≈ 0), mentre **TimeDiff ε sovra-disperde** (copertura ≈ 1, MASE 4.0): cambiare parametrizzazione non lo calibra.
+
+Numeri completi: M0 160.5 · M1 867.5 · M2 253.7 · M3 241.6 · M4 (x0) 287.3 · M4ε (ε) 1376.3.
+
+**Dataset.** *Exchange* (D=8, giornaliero) come sandbox/controllo negativo (quasi random walk, M0 difficile da battere); *Electricity* (D=321, orario) come dataset principale, forte stagionalità. Entrambi dalla collezione LSTNet (<https://github.com/laiguokun/multivariate-time-series-data>). Usiamo lo split **nostro** 70/10/20, non `electricity_nips`: il CRPS è **interno**, non confrontabile coi paper.
+
+**Materiale finale.** Il pacchetto autosufficiente è in [`consegna_finale/`](consegna_finale/): [slide PDF](consegna_finale/slides/deck_electricity_it.pdf), [REPORT.pdf](consegna_finale/REPORT.pdf), [sintesi di una pagina](consegna_finale/SINTESI_PROGETTO.pdf), indice in [`LEGGIMI_CONSEGNA.md`](consegna_finale/LEGGIMI_CONSEGNA.md). Il report completo (sorgente Markdown) è anche in [`REPORT.md`](REPORT.md).
+
+**Limiti e lavori futuri.** Split interno (E0 predisposto ma non eseguito, serve GPU); un solo seed e budget modesto; calibrazione di TimeDiff irrisolta (né x0 né ε); E6 è una demo su M0 (confronto cross-model futuro); E2/E3 in corso, E4 pianificato, toy DDPM didattico.
+
+**Per i colleghi:** leggete prima il piano (Parti 1–3 di [`docs/IMPLEMENTATION_PLAN_IT.md`](docs/IMPLEMENTATION_PLAN_IT.md)), poi la parte del vostro ruolo. Regola d'oro: far girare tutta la pipeline sul piccolo dataset **Exchange** prima di salire a Electricity.

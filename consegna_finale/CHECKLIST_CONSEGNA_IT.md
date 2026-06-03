@@ -14,7 +14,7 @@ non si spunta, sistemarla prima di inviare.
 - [ ] **Slide in PDF** — `slides/deck_electricity_it.pdf`.
 - [ ] **Report** — `REPORT.md` (oppure `REPORT.pdf`, se il professore preferisce un PDF).
 - [ ] **Link al repository GitHub** — `Icaica14/pml-diffusion-tsf`.
-- [ ] *(facoltativo)* **Sintesi di una pagina** — `ONE_PAGE_SUMMARY_IT.md`.
+- [ ] *(facoltativo)* **Sintesi di una pagina** — `SINTESI_PROGETTO.md`.
 - [ ] *(facoltativo)* **Slide in PPTX** — `slides/deck_electricity_it.pptx`, se serve
       modificarle dal vivo o usare le note nel pannello note.
 
@@ -29,11 +29,11 @@ non si spunta, sistemarla prima di inviare.
       titolo (ci sono i tre nomi reali con le matricole).
 - [ ] **Aprire il PDF delle slide** e scorrerlo per intero (anche le backup B1–B7).
 - [ ] **Aprire il PPTX** e verificare che le note del relatore ci siano nel pannello note.
-- [ ] **Provare l'esposizione in 8–10 minuti** con `SPEAKER_SCRIPT_8_MIN_IT.md`, cronometrando.
+- [ ] **Provare l'esposizione in 8–10 minuti** con `SCRIPT_PRESENTAZIONE.md`, cronometrando.
 - [ ] **Decidere chi dice cosa:** la divisione attuale è A = Giovanni, B = Lorenzo Di
       Bernardo, C = Lorenzo Karol Gobbo (nello speaker script e nella tabella ruoli del
       README). Confermarla o scambiarla.
-- [ ] **Q&A ripassato** — `QA_ORALE_ELECTRICITY_IT.md`.
+- [ ] **Q&A ripassato** — `DOMANDE_ORALE.md`.
 
 ## Da presentare come limiti / lavoro futuro, non come risultati
 
@@ -65,5 +65,5 @@ python3 -m experiments.plot_presentation
 ## Stato del repository
 
 - Le modifiche di questa fase (matricole, sintesi di una pagina, ritocchi ai testi, cartella
-  `deliverables/final/`) sono nel working tree e **non ancora committate**: rivederle con
+  `consegna_finale/`) sono nel working tree e **non ancora committate**: rivederle con
   `git status` / `git diff` e committarle quando siete d'accordo.

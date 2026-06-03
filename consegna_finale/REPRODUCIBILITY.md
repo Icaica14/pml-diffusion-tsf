@@ -7,7 +7,7 @@
 > seconds.
 
 This file tells a reader exactly how to re-derive each deliverable in
-`deliverables/final/`. Paths below are **repo-relative** — run every command from the
+`consegna_finale/`. Paths below are **repo-relative** — run every command from the
 repository root unless noted.
 
 ---

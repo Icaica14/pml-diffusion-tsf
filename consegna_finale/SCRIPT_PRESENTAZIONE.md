@@ -171,4 +171,4 @@ per le domande."
   (batte DeepAR, non M0); citare TimeDiff (M4) in una frase a Slide 5 e — se in tempo —
   l'aside opzionale a Slide 8 (punto nitido, incertezza collassata). Tenere pronte le
   slide di **backup** (B1–B7, con **B7** dedicata a TimeDiff e all'ablazione ε) per il
-  Q&A → vedi [`QA_ORALE_ELECTRICITY_IT.md`](QA_ORALE_ELECTRICITY_IT.md).
+  Q&A → vedi [`DOMANDE_ORALE.md`](DOMANDE_ORALE.md).
